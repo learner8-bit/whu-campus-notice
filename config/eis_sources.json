@@ -1,0 +1,51 @@
+[
+  {
+    "id": "general_notice",
+    "name": "综合通知",
+    "url": "http://eis.whu.edu.cn/dqxz/zhtz.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "research_notice",
+    "name": "科研通知",
+    "url": "http://eis.whu.edu.cn/kxyj/kytz.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "academic_lecture",
+    "name": "学术讲座",
+    "url": "http://eis.whu.edu.cn/kxyj/xsjz.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "undergraduate_education",
+    "name": "本科生教育",
+    "url": "http://eis.whu.edu.cn/rcpy/bksjy.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "student_notice",
+    "name": "学工通知",
+    "url": "http://eis.whu.edu.cn/xsgz/xgtz.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "student_activity",
+    "name": "学生活动",
+    "url": "http://eis.whu.edu.cn/xsgz/xshd.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "youth_league",
+    "name": "共青团工作",
+    "url": "http://eis.whu.edu.cn/xsgz/gqtgz.htm",
+    "include_for_sampling": true
+  },
+  {
+    "id": "study_abroad_notice",
+    "name": "留学通知",
+    "url": "http://eis.whu.edu.cn/dwjl/lxtz.htm",
+    "include_for_sampling": true
+  }
+]
+

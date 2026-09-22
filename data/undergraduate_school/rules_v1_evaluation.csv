@@ -1,0 +1,10 @@
+﻿manual_label,rule_label,count
+filter,filter,3
+filter,keep,4
+filter,review,12
+keep,filter,2
+keep,keep,36
+keep,review,16
+review,filter,1
+review,keep,3
+review,review,5

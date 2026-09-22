@@ -1,0 +1,110 @@
+﻿published_at,source_id,source_name,title,rule_label,score,reasons,has_attachment,url
+2026-09-22,student_notice,学工通知,电子信息学院关于评选2025-2026学年度奖学金和先进班集体先进个人的通知,keep,6,命中行动/机会词：评选、奖学金,True,https://eis.whu.edu.cn/info/1411/64941.htm
+2026-09-19,student_notice,学工通知,电子信息学院关于2026年学生中秋节、国庆节放假安排的通知,keep,3,命中行动/机会词：放假安排,False,https://eis.whu.edu.cn/info/1411/64921.htm
+2026-09-16,student_notice,学工通知,武汉大学电子信息学院学生工作办公室本科生学生助理招募通知,keep,6,命中行动/机会词：招募、招聘,False,https://eis.whu.edu.cn/info/1411/64861.htm
+2026-09-15,academic_lecture,学术讲座,学术讲座公告--第二届全国电磁前沿交叉技术大会系列报告,keep,8,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：报名、讲座,False,https://eis.whu.edu.cn/info/2471/64811.htm
+2026-09-15,student_notice,学工通知,关于开展电子信息学院2025-2026学年本科生素质综合测评工作的通知,keep,6,命中行动/机会词：参加、素质综合测评,True,https://eis.whu.edu.cn/info/1411/64801.htm
+2026-09-14,undergraduate_education,本科生教育,喜报！我院本科生首次获批国家自然科学基金青年学生基础研究项目（本科生）,filter,-7,命中行动/机会词：申报；命中降权词：喜报、获批,False,https://eis.whu.edu.cn/info/1371/64771.htm
+2026-09-14,student_activity,学生活动, 一年级计划 | 慎思笃行担使命 创芯逐梦启新程——电子信息学院2026级本科生新生见面会暨院长第一课圆满举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/64781.htm
+2026-09-14,academic_lecture,学术讲座,学术讲座公告---二维范德华半导体光物理的扭转和腔调控,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/64751.htm
+2026-09-11,student_notice,学工通知,共青团武汉大学电子信息学院委员会组织部增补工作人员拟聘用名单公示,review,-4,命中降权词：名单公示、拟聘用名单,False,https://eis.whu.edu.cn/info/1411/64711.htm
+2026-09-11,youth_league,共青团工作,共青团武汉大学电子信息学院委员会组织部增补工作人员拟聘用名单公示,review,-4,命中降权词：名单公示、拟聘用名单,False,https://eis.whu.edu.cn/info/1441/64721.htm
+2026-09-08,undergraduate_education,本科生教育,关于组织参加2026年全国大学生嵌入式芯片与系统设计竞赛FPGA创新设计赛道的通知,keep,8,命中行动/机会词：报名、参加、竞赛,False,https://eis.whu.edu.cn/info/1401/62231.htm
+2026-09-07,general_notice,综合通知,关于以民主推荐方式选拔电子信息学院内设机构副主任的公告,filter,-4,命中行动/机会词：选拔、推荐；命中降权词：全院教职工、内设机构,False,https://eis.whu.edu.cn/info/1261/62221.htm
+2026-09-04,student_activity,学生活动,一年级计划 | 电子信息学院开展2026级研究生新生入学教育,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/62201.htm
+2026-09-03,undergraduate_education,本科生教育,珞珈筑擂，群英逐梦——2026 全国大学生电子设计竞赛 TI 杯模拟电子系统设计专题赛在武大圆满落幕,filter,-3,命中行动/机会词：竞赛；命中降权词：圆满落幕,False,https://eis.whu.edu.cn/info/1371/62151.htm
+2026-09-03,student_activity,学生活动,一年级计划 | 以芯向新 电信新芯——武汉大学电子信息学院2026级研究生新生见面会,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/62171.htm
+2026-09-03,youth_league,共青团工作,关于增补共青团武汉大学电子信息学院委员会组织部工作人员的通知,filter,3,命中行动/机会词：招募,True,https://eis.whu.edu.cn/info/1441/61941.htm
+2026-09-02,undergraduate_education,本科生教育,关于启动电子信息学院2027届推荐免试研究生工作的通知,keep,12,命中行动/机会词：申请、推荐、推免、毕业,True,https://eis.whu.edu.cn/info/1361/61921.htm
+2026-09-02,student_activity,学生活动,一年级计划 | 家校协同育人 共筑成长桥梁 ——学院举办2026级本科新生家长见面会,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61811.htm
+2026-09-02,student_notice,学工通知,电子信息学院关于2026-2027学年第一学期学生报到注册的通知,keep,3,命中行动/机会词：报到注册,False,https://eis.whu.edu.cn/info/1411/61911.htm
+2026-09-01,student_activity,学生活动,一年级计划 | “芯”潮澎湃，“电”亮新程——武汉大学电子信息学院2026年本科生迎新圆满落幕,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61801.htm
+2026-08-31,student_activity,学生活动,一年级计划 | “育”见新程，携手同行——电子信息学院2026级本科生班主任聘任仪式暨协同育人工作交流会顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61791.htm
+2026-08-28,undergraduate_education,本科生教育,从“芯”出发，硕果盈枝：我院学子在集创赛中斩获13项国家级奖项,filter,-3,命中行动/机会词：创新创业；命中降权词：斩获,False,https://eis.whu.edu.cn/info/1371/61721.htm
+2026-08-28,student_activity,学生活动,访企拓岗|三线探产业，研学促成长——“校园大使走进吴江开发区”暑期研学活动顺利开展,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61781.htm
+2026-08-28,academic_lecture,学术讲座,学术讲座公告---On-Chip Functional Meta-Devices Enabled by Nanophotonic Cavities,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/61891.htm
+2026-08-27,undergraduate_education,本科生教育,赋能前沿产业，2026年“瑞萨杯”信息科技前沿专题赛电信学子再创佳绩！,filter,0,命中行动/机会词：评选、竞赛；命中降权词：再创佳绩,False,https://eis.whu.edu.cn/info/1371/61711.htm
+2026-08-26,academic_lecture,学术讲座,学术讲座公告---Advanced Methods in Regional Speech Enhancement and Far-to-Near-Field Transformation,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/61881.htm
+2026-08-21,student_activity,学生活动,​第九届中国研究生创“芯”大赛落幕，我院研究生荣获佳绩,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61771.htm
+2026-08-18,student_activity,学生活动,第二十一届中国研究生电子设计竞赛落幕，我院研究生荣获佳绩,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61761.htm
+2026-08-13,student_activity,学生活动,“芯”系蓉城，科创报国 | 科技自立自强视域下成都电子信息产业自主创新路径调研——武汉大学电子信息学院实践队赴成都开展暑期调研,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/64631.htm
+2026-08-11,student_activity,学生活动,寻迹红色电波，淬炼初心使命——武汉大学电子信息学院“红色电波”实践队赴江西开展研学实践,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61751.htm
+2026-08-06,undergraduate_education,本科生教育,克难笃行，“AI”之路再奋进 —— 我院学子征战2026英特尔杯AI专题赛再获多项国奖,filter,-3,命中行动/机会词：竞赛；命中降权词：再获,False,https://eis.whu.edu.cn/info/1371/61701.htm
+2026-08-03,student_notice,学工通知,【志愿服务】2026年全国大学生电子设计竞赛模拟电子系统设计专题赛志愿者招募通知,keep,7,命中行动/机会词：招募、竞赛、志愿,False,https://eis.whu.edu.cn/info/1411/61831.htm
+2026-07-20,student_notice,学工通知,关于选聘电子信息学院2026级本科新生助理班主任的通知,keep,3,命中行动/机会词：选聘,True,https://eis.whu.edu.cn/info/1411/61841.htm
+2026-07-17,study_abroad_notice,留学通知,关于申报2026年下半年本科生全球胜任力培养资助计划的通知,keep,8,留学通知栏目具有较强机会先验；命中行动/机会词：申报、资助,True,https://oir.whu.edu.cn/info/1121/45601.htm
+2026-07-17,study_abroad_notice,留学通知,关于开展2026年研究生出国（境）交流学习资助工作的通知,filter,7,留学通知栏目具有较强机会先验；命中行动/机会词：资助、交流学习,False,https://gs.whu.edu.cn/system/resource/visitcode/visitcode.jsp?backUrl=aHR0cDovL2dzLndodS5lZHUuY24vY29udGVudC5qc3A/dXJsdHlwZT1uZXdzLk5ld3NDb250ZW50VXJsJndidHJlZWlkPTEwNjMmd2JuZXdzaWQ9MTA4MjEx
+2026-07-16,academic_lecture,学术讲座,学术讲座公告---大语言模型时代下的部分伪造音频,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54081.htm
+2026-07-14,academic_lecture,学术讲座,​学术讲座公告---高效听觉分离与增强,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54071.htm
+2026-07-14,academic_lecture,学术讲座,​学术讲座公告---从语音理解与生成，迈向语音交互,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54061.htm
+2026-07-08,student_notice,学工通知,电子信息学院关于2026年学生放暑假及相关事项的通知,keep,3,命中行动/机会词：放暑假,False,https://eis.whu.edu.cn/info/1411/8401.htm
+2026-07-07,student_activity,学生活动,共青团武汉大学电子信息学院第二十次代表大会顺利召开,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14081.htm
+2026-07-06,academic_lecture,学术讲座,学术讲座公告---光子晶体面发射激光（PCSEL）技术,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54051.htm
+2026-07-03,student_activity,学生活动,珞珈职航 | 探访西部芯谷科创高地，洞察电子信息数智未来 —— 武汉大学电子信息学院师生赴成都开展暑期实践活动,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/61741.htm
+2026-07-03,academic_lecture,学术讲座,学术讲座公告---面向低轨卫星定位的厘米级发射标签设计与实现,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54041.htm
+2026-06-30,student_notice,学工通知,关于选聘电子信息学院2026级本科新生班主任的通知,filter,3,命中行动/机会词：选聘,True,https://eis.whu.edu.cn/info/1411/8391.htm
+2026-06-30,student_notice,学工通知,关于组织参加“校园大使走进吴江开发区”产教融合研学活动的通知,keep,3,命中行动/机会词：参加,False,https://eis.whu.edu.cn/info/1411/8381.htm
+2026-06-17,general_notice,综合通知,关于召开全院教职工大会的通知,filter,-10,命中降权词：全院教职工、教职工大会,False,https://eis.whu.edu.cn/info/1261/35981.htm
+2026-06-17,academic_lecture,学术讲座,学术讲座公告---“博学”讲座系列 第二期,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54031.htm
+2026-06-16,student_activity,学生活动,电子信息学院2026届毕业生“我心中的好导师”,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14071.htm
+2026-06-16,student_activity,学生活动,电子信息学院2026届“电信骄子”,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14061.htm
+2026-06-16,student_notice,学工通知,电子信息学院关于2026年学生端午节放假安排的通知,keep,3,命中行动/机会词：放假安排,False,https://eis.whu.edu.cn/info/1411/8371.htm
+2026-06-15,student_activity,学生活动,逐梦新征程 韶华再出发｜电子信息学院2026届毕业生共上最后一堂课,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14051.htm
+2026-06-15,student_notice,学工通知,关于召开共青团武汉大学电子信息学院第二十次代表大会的通知,keep,0,,False,https://eis.whu.edu.cn/info/1411/8431.htm
+2026-06-10,student_activity,学生活动,“华为杯”武汉大学第二十届研究生电子设计大赛选拔赛顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14041.htm
+2026-06-05,student_activity,学生活动,启封时光，逐梦远航 ——我院举办2026届本科毕业生时光胶囊拆封暨师生座谈会,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14031.htm
+2026-06-04,student_activity,学生活动,2025级本科生心理健康主题教育顺利开展,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14021.htm
+2026-06-01,research_notice,科研通知,【国家自然科学基金】关于转发非集中期国家自然科学基金项目申报指南的通知（滚动更新）,filter,3,命中行动/机会词：申报,False,https://kfy.whu.edu.cn/system/resource/visitcode/visitcode.jsp?backUrl=aHR0cDovL2tmeS53aHUuZWR1LmNuL3h3eHF5LmpzcD91cmx0eXBlPW5ld3MuTmV3c0NvbnRlbnRVcmwmd2J0cmVlaWQ9MTAyNiZ3Ym5ld3NpZD0yMzMxMQ==
+2026-06-01,student_notice,学工通知,武汉大学电子信息学院第二十六届学生会部门负责人招聘通知,keep,3,命中行动/机会词：招聘,True,https://eis.whu.edu.cn/info/1411/8361.htm
+2026-05-29,student_activity,学生活动,电信学院组织开展红十字救护员劳动教育实践培训,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14011.htm
+2026-05-29,student_activity,学生活动,以体育人，以赛同行——电子信息学院“信火杯”体育友谊赛圆满落幕！,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/14001.htm
+2026-05-29,student_notice,学工通知,关于评选电子信息学院2026届毕业生“我心中的好导师”的通知,keep,6,命中行动/机会词：评选、毕业,False,https://eis.whu.edu.cn/info/1411/8351.htm
+2026-05-29,student_notice,学工通知,关于评选电子信息学院2026届“电信骄子”的通知,keep,9,命中行动/机会词：评选、推荐、毕业,True,https://eis.whu.edu.cn/info/1411/8341.htm
+2026-05-26,student_activity,学生活动,探访前沿产业一线，勇担青年时代重任——23级卓工班赴杭州开展实地研学活动,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13991.htm
+2026-05-25,student_activity,学生活动,喜报！我院胡英泽同学荣获“十大珞珈风云学子”称号,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13981.htm
+2026-05-24,student_activity,学生活动,学术导师面对面||电子信息学院本科生学术导师双选会顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13971.htm
+2026-05-24,student_activity,学生活动,喜报‖全校第一！我院获评体育总成绩优秀单位、阳光体育运动先进集体,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13951.htm
+2026-05-24,student_activity,学生活动,​  校友助力暖人心，精准指导促就业  ——我院联合上海校友会成功举办“一小时企业导师计划”活动,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13961.htm
+2026-05-19,general_notice,综合通知,武汉大学 “卓越芯火计划”（第十七期）报名通知,keep,3,命中行动/机会词：报名,True,https://eis.whu.edu.cn/info/1261/1631.htm
+2026-05-19,student_activity,学生活动,光影流转，舞随心动——电信学子在体育艺术舞蹈大赛斩获团体第一名,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13931.htm
+2026-05-19,student_activity,学生活动,“引航计划”职业规划经验交流会顺利举办,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13941.htm
+2026-05-19,student_notice,学工通知,关于开展2024级、2025级本科生“学术导师面对面”活动的通知,keep,3,命中行动/机会词：学术导师,True,https://eis.whu.edu.cn/info/1411/8421.htm
+2026-05-14,general_notice,综合通知,关于实施《电子信息学院研究生党支部指导老师工作条例》的通知,filter,0,,True,https://eis.whu.edu.cn/info/1261/1621.htm
+2026-05-14,general_notice,综合通知,关于公布电子信息学院首批“样板党支部”  培育创建单位名单的通知,filter,3,命中行动/机会词：申报,False,https://eis.whu.edu.cn/info/1261/1611.htm
+2026-05-13,youth_league,共青团工作,关于公布武汉大学学生会第十七期“未来学院”电子信息学院分校结业学员及优秀学员名单的通知,filter,1,命中行动/机会词：推荐；命中降权词：结业学员,False,https://eis.whu.edu.cn/system/resource/visitcode/visitcode.jsp?backUrl=aHR0cDovL2Vpcy53aHUuZWR1LmNuL2NvbnRlbnQuanNwP3VybHR5cGU9bmV3cy5OZXdzQ29udGVudFVybCZ3YnRyZWVpZD0xNDQxJndibmV3c2lkPTY0ODIx
+2026-05-12,student_activity,学生活动,武大电信学子勇夺2026年IEEE信号处理杯冠军,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13921.htm
+2026-05-11,student_activity,学生活动,电子信息学院第二十六次学生代表大会顺利召开,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13911.htm
+2026-04-30,student_activity,学生活动,学院团委荣获2026年武汉大学“五四红旗团委工作进步奖”“共青团工作先进单位”,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13891.htm
+2026-04-30,student_activity,学生活动,学院召开2025年度育人工作总结表彰大会,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13901.htm
+2026-04-28,general_notice,综合通知,关于召开学院2025年度育人工作总结表彰活动的通知,filter,-5,命中降权词：全院教职工,False,https://eis.whu.edu.cn/info/1261/1601.htm
+2026-04-28,student_activity,学生活动,党建引领聚合力，联学共建促成长——我院与华科大电信学院开展联合主题党日活动,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13881.htm
+2026-04-27,student_notice,学工通知,关于做好2026年上半年发展团员工作的通知,keep,3,命中行动/机会词：发展团员,True,https://eis.whu.edu.cn/info/1411/8331.htm
+2026-04-27,youth_league,共青团工作,关于做好2026年上半年发展团员工作的通知,keep,3,命中行动/机会词：发展团员,True,https://eis.whu.edu.cn/info/1441/11791.htm
+2026-04-22,general_notice,综合通知,关于聘任万显荣等同志为研究生党支部党委联系人、党建导师的决定,filter,0,,True,https://eis.whu.edu.cn/info/1261/1591.htm
+2026-04-20,student_notice,学工通知,电子信息学院关于2026年学生劳动节放假安排的通知,keep,6,命中行动/机会词：申请、放假安排,False,https://eis.whu.edu.cn/info/1411/8411.htm
+2026-04-17,student_activity,学生活动,火炬杯再续荣光！电信男排勇夺冠军，女排斩获第七，双队齐创佳绩,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13871.htm
+2026-04-17,student_activity,学生活动,武汉大学电子信息类2026届毕业生暨2027届实习生春季专场招聘会成功举办,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13861.htm
+2026-04-17,student_notice,学工通知,关于召开武汉大学电子信息学院第二十六次学生代表大会的预通知,keep,0,,True,https://eis.whu.edu.cn/info/1411/8321.htm
+2026-04-17,youth_league,共青团工作,电子信息学院团委2025年度团内评优拟推荐名单的公示,review,9,命中行动/机会词：申请、申报、推荐,True,https://eis.whu.edu.cn/info/1441/11781.htm
+2026-04-16,academic_lecture,学术讲座,学术讲座公告---基于磁电偶极子的带内全双工天线去耦技术研究,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54021.htm
+2026-04-13,academic_lecture,学术讲座,学术讲座公告---通信感知一体化：理论极限、信号处理及决策优化,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54011.htm
+2026-04-13,student_notice,学工通知,关于推荐表彰2025年度电信芯榜样的通知,keep,10,命中行动/机会词：申报、推荐、志愿、社会实践,True,https://eis.whu.edu.cn/info/1411/8311.htm
+2026-04-11,student_notice,学工通知,关于组织研究生参加第九届中国研究生创“芯”大赛武汉大学选拔赛的通知,filter,6,命中行动/机会词：选拔、参加,True,https://eis.whu.edu.cn/info/1411/8291.htm
+2026-04-11,student_notice,学工通知,关于组织研究生参加武汉大学第二十届研究生电子设计大赛暨第二十一届中国研究生电子设计竞赛校园选拔赛的通知,filter,8,命中行动/机会词：选拔、参加、竞赛,True,https://eis.whu.edu.cn/info/1411/8301.htm
+2026-04-10,general_notice,综合通知,关于开展武汉大学电子信息学院首批院级“样板党支部”培育创建工作的通知,review,0,,True,https://eis.whu.edu.cn/info/1261/1581.htm
+2026-04-10,student_notice,学工通知,电子信息学院2026届优秀本科毕业生拟推荐名单公示,review,10,命中行动/机会词：申请、评选、推荐、毕业；命中降权词：名单公示,True,https://eis.whu.edu.cn/info/1411/8281.htm
+2026-04-10,youth_league,共青团工作,关于武汉大学电子信息学院2026年上半年团支部“推优入党”名单的公示(入党积极分子和发展对象候选人),review,3,命中行动/机会词：推荐,True,https://eis.whu.edu.cn/info/1441/11771.htm
+2026-04-07,student_activity,学生活动,科创筑基，智启新程——电子信息学院2025级试点班开班仪式顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13851.htm
+2026-04-07,student_notice,学工通知,关于武汉大学电子信息学院第二十六届学生会主席团候选人报名推荐的通知,keep,6,命中行动/机会词：报名、推荐,True,https://eis.whu.edu.cn/info/1411/8271.htm
+2026-04-03,student_notice,学工通知,电子信息学院关于2026年学生清明节放假安排的通知,keep,3,命中行动/机会词：放假安排,False,https://eis.whu.edu.cn/info/1411/8261.htm
+2026-03-30,student_activity,学生活动,聚焦学情促提升，协同发力共育人——我院学情分析座谈交流会顺利召开,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13801.htm
+2026-03-30,student_activity,学生活动,第十三届“自强杯”大学生创业计划竞赛电子信息学院院内指导赛顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13821.htm
+2026-03-30,student_activity,学生活动,电子信息学院2025-2026学年团委学生会终期述职大会顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13831.htm
+2026-03-30,student_activity,学生活动,樱漫珞珈，志愿暖行——学院学生会圆满完成樱花开放期间志愿服务工作,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13841.htm
+2026-03-30,student_activity,学生活动,倾听心声，共话新程——武汉大学电子信息学院院领导接待学生日顺利举行,filter,-10,学生活动栏目样本均为活动完成后的新闻回顾,False,https://eis.whu.edu.cn/info/1421/13811.htm
+2026-03-30,academic_lecture,学术讲座,"学术讲座公告---Physical-Layer Enablers of Future Wireless Networks: Security, Reconfigurable Propagation, and Cell-Free Architectures",keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/54001.htm
+2026-03-27,academic_lecture,学术讲座,学术讲座公告---高纯度线偏微型准BIC激光器,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/53991.htm
+2026-03-27,academic_lecture,学术讲座,​学术讲座公告---超紧凑太赫兹量子级联激光器,keep,5,学术讲座栏目对本科生默认有关注价值；命中行动/机会词：讲座,False,https://eis.whu.edu.cn/info/2471/53981.htm
+2026-03-27,student_notice,学工通知,武汉大学电子信息类2026届毕业生暨2027届实习生春季专场招聘会邀请函,filter,9,命中行动/机会词：招聘、选聘、毕业,True,https://eis.whu.edu.cn/info/1411/8241.htm
+2026-03-27,student_notice,学工通知,关于开展2024级、2025级本科生学术导师双选工作的通知,keep,6,命中行动/机会词：学术导师、导师双选,True,https://eis.whu.edu.cn/info/1411/8251.htm
+2026-03-26,undergraduate_education,本科生教育,关于组织参加第十四届全国大学生光电设计竞赛的通知,keep,5,命中行动/机会词：参加、竞赛,True,https://eis.whu.edu.cn/info/1401/28941.htm

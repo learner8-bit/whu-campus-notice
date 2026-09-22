@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+data/runs/
+data/state/*.sqlite3-journal
+data/state/*.sqlite3-wal
+data/state/*.sqlite3-shm
+data/state/notices.pre-verification-fix.sqlite3
+data/undergraduate_school/notices.pre-verification-fix.jsonl
