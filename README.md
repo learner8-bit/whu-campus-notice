@@ -26,6 +26,6 @@ python scripts/daily_digest.py
 python scripts/daily_digest.py --send --channels feishu
 ```
 
-飞书发送不需要配置邮箱。成功发送记录会写入 SQLite；同一天相同内容再次运行不会重复发送。飞书长消息自动分段。将来需要邮件时可配置 SMTP 并改用 `--channels both`。更多配置、GitHub Actions 22:07 定时运行方法及已知限制见[部署说明](docs/deployment.md)。
+飞书发送不需要配置邮箱。成功发送记录会写入 SQLite；同一天相同内容再次运行不会重复发送。飞书长消息自动分段。将来需要邮件时可配置 SMTP 并改用 `--channels both`。更多配置、GitHub Actions 22:00 定时运行方法及已知限制见[部署说明](docs/deployment.md)。
 
 当前只覆盖两个已实现的网站；原计划的学工部、资助中心、团委、国际交流部等仍需逐站接入。旧本科生院页面有 30 条被官网验证码阻断，不会伪装成详情抓取成功。研究数据和跨站评估见[本科生院报告](docs/undergraduate_school_report.md)。
