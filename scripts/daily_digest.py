@@ -23,6 +23,7 @@ from whu_notice_research.digest import (  # noqa: E402
 )
 from whu_notice_research.health import (  # noqa: E402
     HealthIssue,
+    ai_health_issues,
     notice_health_issues,
     render_health_alert,
 )
@@ -128,14 +129,7 @@ def main() -> int:
             f"ai: analyzed={ai_stats.analyzed} cached={ai_stats.cached} "
             f"failed={ai_stats.failed} disabled={ai_stats.disabled}"
         )
-        if ai_config is not None and ai_stats.failed:
-            health_issues.append(
-                HealthIssue("ai", ai_config.model, f"{ai_stats.failed} 条通知分析失败")
-            )
-        if unique and ai_config is None:
-            health_issues.append(
-                HealthIssue("ai", "DeepSeek", "AI_API_KEY 未生效，已退回规则筛选")
-            )
+        health_issues.extend(ai_health_issues(ai_config, ai_stats, len(unique)))
         digest = build_digest(day, unique, scan_status)
         plain = render_text(digest)
         html_body = render_html(digest)

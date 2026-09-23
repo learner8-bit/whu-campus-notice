@@ -14,6 +14,21 @@ class HealthIssue:
     detail: str
 
 
+def ai_health_issues(config: object | None, stats: object, notice_count: int) -> list[HealthIssue]:
+    """Report AI degradation without assuming that a configuration exists."""
+    if config is None:
+        return (
+            [HealthIssue("ai", "DeepSeek", "AI_API_KEY 未生效，已退回规则筛选")]
+            if notice_count
+            else []
+        )
+    failed = int(getattr(stats, "failed", 0))
+    if not failed:
+        return []
+    model = str(getattr(config, "model", "DeepSeek"))
+    return [HealthIssue("ai", model, f"{failed} 条通知分析失败")]
+
+
 def notice_health_issues(notice: Notice) -> list[HealthIssue]:
     """Return actionable parser failures found while enriching one notice."""
     issues: list[HealthIssue] = []

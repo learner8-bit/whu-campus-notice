@@ -3,15 +3,25 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from whu_notice_research.health import HealthIssue, notice_health_issues, render_health_alert
+from whu_notice_research.health import (
+    HealthIssue,
+    ai_health_issues,
+    notice_health_issues,
+    render_health_alert,
+)
 from whu_notice_research.models import Notice
 
 
 class HealthTests(unittest.TestCase):
+    def test_disabled_ai_is_a_health_issue_without_attribute_access(self) -> None:
+        issues = ai_health_issues(None, SimpleNamespace(failed=0), 2)
+        self.assertEqual(len(issues), 1)
+        self.assertIn("AI_API_KEY", issues[0].detail)
     def test_notice_failures_are_reported(self) -> None:
         notice = Notice(
             source_id="notice",
