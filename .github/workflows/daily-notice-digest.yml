@@ -16,6 +16,11 @@ on:
         required: false
         default: ''
         type: string
+      diagnostic_only:
+        description: 'Analyze without sending Feishu messages'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -45,15 +50,19 @@ jobs:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FORCE_SEND: ${{ inputs.force_send || 'false' }}
           DIGEST_DAY: ${{ inputs.digest_day || '' }}
+          DIAGNOSTIC_ONLY: ${{ inputs.diagnostic_only || 'false' }}
         run: |
-          EXTRA_ARGS=""
-          if [ "$FORCE_SEND" = "true" ]; then
-            EXTRA_ARGS="--force-send"
+          EXTRA_ARGS="--channels feishu"
+          if [ "$DIAGNOSTIC_ONLY" != "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --send"
+          fi
+          if [ "$FORCE_SEND" = "true" ] && [ "$DIAGNOSTIC_ONLY" != "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --force-send"
           fi
           if [ -n "$DIGEST_DAY" ]; then
             EXTRA_ARGS="$EXTRA_ARGS --digest-day $DIGEST_DAY"
           fi
-          python scripts/daily_digest.py --send --channels feishu $EXTRA_ARGS
+          python scripts/daily_digest.py $EXTRA_ARGS
       - name: Notify unexpected workflow failure
         if: ${{ failure() && env.HEALTH_ALERT_SENT != 'true' }}
         continue-on-error: true

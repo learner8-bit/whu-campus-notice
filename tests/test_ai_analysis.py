@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -175,6 +177,24 @@ class AIAnalysisTests(unittest.TestCase):
         self.assertEqual(payload["reasoning_effort"], "low")
         self.assertEqual(result["deadline"], "9月30日")
         self.assertEqual(result["value"], "")
+
+    @patch("whu_notice_research.ai_analysis.time.sleep")
+    @patch("whu_notice_research.ai_analysis.urlopen")
+    def test_http_error_reason_is_safe_and_actionable(self, urlopen_mock, _sleep_mock) -> None:
+        body = json.dumps({"error": {"message": "Rate limit reached"}}).encode("utf-8")
+        urlopen_mock.side_effect = [
+            HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, BytesIO(body)),
+            HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, BytesIO(body)),
+        ]
+        config = AIConfig(
+            api_key="secret",
+            provider="deepseek",
+            base_url="https://api.deepseek.com",
+            model="deepseek-flash",
+            user_profile="test",
+        )
+        with self.assertRaisesRegex(RuntimeError, "HTTP 429: Rate limit reached"):
+            analyze_notice(sample_notice(), config, policy_context="none")
 
     def test_compact_message_has_no_confidence_or_signup_link(self) -> None:
         notice = sample_notice()

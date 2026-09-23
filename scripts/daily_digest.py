@@ -138,6 +138,8 @@ def main() -> int:
             f"ai: analyzed={ai_stats.analyzed} cached={ai_stats.cached} "
             f"failed={ai_stats.failed} disabled={ai_stats.disabled}"
         )
+        for failure in ai_stats.failures:
+            print(f"ai failure: {failure}", file=sys.stderr)
         health_issues.extend(ai_health_issues(ai_config, ai_stats, len(unique)))
         digest = build_digest(day, unique, scan_status)
         plain = render_text(digest)

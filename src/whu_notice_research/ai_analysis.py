@@ -12,7 +12,7 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.error import HTTPError, URLError
@@ -293,7 +293,22 @@ def analyze_notice(
             last_error = exc
             if attempt == 0:
                 time.sleep(1)
-    raise RuntimeError(f"AI analysis failed: {type(last_error).__name__}") from last_error
+    if isinstance(last_error, HTTPError):
+        detail = f"HTTP {last_error.code}"
+        try:
+            error_payload = json.loads(last_error.read().decode("utf-8", errors="replace"))
+            message = error_payload.get("error", {}).get("message", "")
+            if message:
+                detail += f": {str(message)[:160]}"
+        except (ValueError, AttributeError):
+            pass
+    elif isinstance(last_error, URLError):
+        detail = f"network {type(last_error.reason).__name__}: {str(last_error.reason)[:120]}"
+    elif isinstance(last_error, TimeoutError):
+        detail = "request timeout"
+    else:
+        detail = f"{type(last_error).__name__}: {str(last_error)[:160]}"
+    raise RuntimeError(f"AI analysis failed: {detail}") from last_error
 
 
 @dataclass
@@ -302,6 +317,7 @@ class AIStats:
     analyzed: int = 0
     failed: int = 0
     disabled: int = 0
+    failures: list[str] = field(default_factory=list)
 
 
 def attach_ai_analyses(
