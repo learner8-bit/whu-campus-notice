@@ -27,7 +27,7 @@ Write-Step "Checking GitHub login"
 & gh auth status --hostname github.com
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Complete GitHub login in the browser, then run this file again." -ForegroundColor Yellow
-    & gh auth login --hostname github.com --web
+    & gh auth login --hostname github.com --web --git-protocol https
     if ($LASTEXITCODE -ne 0) {
         Stop-WithMessage "GitHub login was not completed."
     }
