@@ -36,7 +36,7 @@ if ($LASTEXITCODE -ne 0) {
 $startedAt = (Get-Date).ToUniversalTime().AddMinutes(-2)
 
 Write-Step "Starting cloud collection, DeepSeek analysis, and Feishu delivery"
-& gh workflow run $Workflow --repo $Repository
+& gh workflow run $Workflow --repo $Repository -f force_send=true
 if ($LASTEXITCODE -ne 0) {
     Stop-WithMessage "Could not start the workflow. Check your network and repository access."
 }
@@ -80,5 +80,5 @@ if ($watchExit -ne 0) {
 
 Write-Host ""
 Write-Host "SUCCESS: the cloud test completed. Check Feishu now." -ForegroundColor Green
-Write-Host "If no new matching notice exists, deduplication may correctly send nothing." -ForegroundColor Yellow
+Write-Host "Test mode bypasses digest deduplication, so Feishu should receive a message." -ForegroundColor Yellow
 Write-Host "Run URL: $($run.url)"

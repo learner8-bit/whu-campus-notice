@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,11 @@ from whu_notice_research.digest import (  # noqa: E402
     render_html,
     render_text,
 )
+from whu_notice_research.health import (  # noqa: E402
+    HealthIssue,
+    notice_health_issues,
+    render_health_alert,
+)
 from whu_notice_research.notify import (  # noqa: E402
     DeliveryConfig,
     load_env_file,
@@ -34,6 +40,10 @@ from whu_notice_research.storage import NoticeStore  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description="Daily WHU notice digest")
     parser.add_argument("--send", action="store_true", help="Actually send notifications")
+    parser.add_argument(
+        "--force-send", action="store_true",
+        help="Send even when the same digest was already delivered (manual testing only)",
+    )
     parser.add_argument(
         "--channels", choices=("feishu", "email", "both"), default="feishu",
         help="Delivery channels; defaults to Feishu only",
@@ -52,6 +62,8 @@ def main() -> int:
         parser.error("--days must be positive and --preview-latest cannot be negative")
     if args.send and args.preview_latest:
         parser.error("--preview-latest cannot be sent; it contains historical notices")
+    if args.force_send and not args.send:
+        parser.error("--force-send requires --send")
 
     load_env_file(ROOT / ".env")
     try:
@@ -68,6 +80,7 @@ def main() -> int:
     day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     baseline_today = []
     scan_status: dict[str, str] = {}
+    health_issues: list[HealthIssue] = []
     if not args.preview_latest:
         for site_id in sorted(SUPPORTED_SITES):
             try:
@@ -86,9 +99,14 @@ def main() -> int:
                     f"{site_id}: fetched={result.fetched_count} "
                     f"new={len(result.sync.new)} updated={len(result.sync.updated)}"
                 )
+                for notice in result.sync.new + result.sync.updated:
+                    health_issues.extend(notice_health_issues(notice))
             except Exception as exc:
                 # The other site and both delivery channels remain useful.
                 scan_status[site_id] = type(exc).__name__
+                health_issues.append(
+                    HealthIssue("site", site_id, f"{type(exc).__name__}: {str(exc)[:160]}")
+                )
                 print(f"{site_id}: scan failed ({type(exc).__name__})", file=sys.stderr)
 
     with NoticeStore(args.database) as store:
@@ -110,6 +128,14 @@ def main() -> int:
             f"ai: analyzed={ai_stats.analyzed} cached={ai_stats.cached} "
             f"failed={ai_stats.failed} disabled={ai_stats.disabled}"
         )
+        if ai_config.enabled and ai_stats.failed:
+            health_issues.append(
+                HealthIssue("ai", ai_config.model, f"{ai_stats.failed} 条通知分析失败")
+            )
+        if unique and not ai_config.enabled:
+            health_issues.append(
+                HealthIssue("ai", "DeepSeek", "AI_API_KEY 未生效，已退回规则筛选")
+            )
         digest = build_digest(day, unique, scan_status)
         plain = render_text(digest)
         html_body = render_html(digest)
@@ -132,7 +158,7 @@ def main() -> int:
         if args.channels in {"feishu", "both"}:
             for index, part in enumerate(feishu_parts(digest), 1):
                 digest_hash = content_hash(part)
-                if store.was_delivered(day, "feishu", digest_hash):
+                if not args.force_send and store.was_delivered(day, "feishu", digest_hash):
                     print(f"Feishu part {index}: already sent")
                     continue
                 try:
@@ -141,11 +167,30 @@ def main() -> int:
                     print(f"Feishu part {index}: sent")
                 except RuntimeError as exc:
                     failed = True
+                    health_issues.append(HealthIssue("delivery", "飞书", str(exc)))
                     print(f"Feishu part {index}: {exc}", file=sys.stderr)
+
+            if health_issues:
+                alert = render_health_alert(day, health_issues)
+                alert_hash = content_hash(alert)
+                if args.force_send or not store.was_delivered(day, "feishu-health", alert_hash):
+                    try:
+                        send_feishu(delivery, alert)
+                        store.record_delivery(day, "feishu-health", alert_hash)
+                        print("Feishu health alert: sent")
+                        github_env = os.getenv("GITHUB_ENV", "")
+                        if github_env:
+                            with open(github_env, "a", encoding="utf-8") as handle:
+                                handle.write("HEALTH_ALERT_SENT=true\n")
+                    except RuntimeError as exc:
+                        failed = True
+                        print(f"Feishu health alert: {exc}", file=sys.stderr)
+                else:
+                    print("Feishu health alert: already sent")
 
         if args.channels in {"email", "both"}:
             email_hash = content_hash(digest.title + "\n" + plain)
-            if store.was_delivered(day, "email", email_hash):
+            if not args.force_send and store.was_delivered(day, "email", email_hash):
                 print("Email: already sent")
             else:
                 try:
@@ -160,3 +205,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
