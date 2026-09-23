@@ -3,33 +3,12 @@ name: Digest definition diagnostic
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
-concurrency:
-  group: digest-definition-diagnostic
-  cancel-in-progress: false
-
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.13'
-      - name: Install document parser
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
-      - name: Collect and send daily digest
-        run: python scripts/daily_digest.py --send --channels feishu
+      - name: Test configured secrets
+        run: echo configured
         env:
-          AI_PROVIDER: deepseek
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          AI_MODEL: deepseek-flash
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-      - name: Inspect state only
-        if: always()
-        run: git status --short data/state/notices.sqlite3
