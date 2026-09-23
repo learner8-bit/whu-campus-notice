@@ -7,8 +7,7 @@ jobs:
   digest:
     runs-on: ubuntu-latest
     steps:
-      - name: Test configured secrets
+      - name: Test DeepSeek secret only
         run: echo configured
         env:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
