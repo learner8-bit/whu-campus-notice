@@ -351,8 +351,11 @@ def attach_ai_analyses(
                 config,
                 policy_context=load_policy_context(project_root, notice),
             )
-        except RuntimeError:
+        except RuntimeError as exc:
             stats.failed += 1
+            stats.failures.append(
+                f'{notice.site_id}｜{notice.title[:80]}｜{str(exc)[:240]}'
+            )
             continue
         notice.ai_analysis = analysis
         store.save_ai_analysis(
