@@ -11,6 +11,11 @@ on:
         required: false
         default: false
         type: boolean
+      digest_day:
+        description: 'Optional YYYY-MM-DD date to resend'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -39,10 +44,14 @@ jobs:
           AI_MODEL: deepseek-flash
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FORCE_SEND: ${{ inputs.force_send || 'false' }}
+          DIGEST_DAY: ${{ inputs.digest_day || '' }}
         run: |
           EXTRA_ARGS=""
           if [ "$FORCE_SEND" = "true" ]; then
             EXTRA_ARGS="--force-send"
+          fi
+          if [ -n "$DIGEST_DAY" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --digest-day $DIGEST_DAY"
           fi
           python scripts/daily_digest.py --send --channels feishu $EXTRA_ARGS
       - name: Notify unexpected workflow failure

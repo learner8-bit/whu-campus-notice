@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -51,6 +51,10 @@ def main() -> int:
     )
     parser.add_argument("--days", type=int, default=30, help="Lookback window for daily scans")
     parser.add_argument(
+        "--digest-day",
+        help="Build the digest for this YYYY-MM-DD date instead of today",
+    )
+    parser.add_argument(
         "--preview-latest", type=int, default=0,
         help="Without scanning, preview this many recent useful stored notices",
     )
@@ -65,6 +69,11 @@ def main() -> int:
         parser.error("--preview-latest cannot be sent; it contains historical notices")
     if args.force_send and not args.send:
         parser.error("--force-send requires --send")
+    if args.digest_day:
+        try:
+            date.fromisoformat(args.digest_day)
+        except ValueError:
+            parser.error("--digest-day must be a valid YYYY-MM-DD date")
 
     load_env_file(ROOT / ".env")
     try:
@@ -78,7 +87,7 @@ def main() -> int:
         except ValueError as exc:
             parser.error(str(exc))
 
-    day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+    day = args.digest_day or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     baseline_today = []
     scan_status: dict[str, str] = {}
     health_issues: list[HealthIssue] = []
