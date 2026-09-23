@@ -1,6 +1,6 @@
 param(
     [string]$Repository = "learner8-bit/whu-campus-notice",
-    [string]$Workflow = "daily-digest.yml"
+    [string]$Workflow = "daily-notice-digest.yml"
 )
 
 $ErrorActionPreference = "Stop"
