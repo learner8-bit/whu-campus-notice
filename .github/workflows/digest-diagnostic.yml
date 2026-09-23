@@ -21,11 +21,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - name: Confirm definition starts
-        run: python --version
-      - name: Exercise persistence shell
+      - name: Install document parser
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Collect and send daily digest
+        run: python scripts/daily_digest.py --send --channels feishu
+        env:
+          AI_PROVIDER: deepseek
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: deepseek-flash
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+      - name: Inspect state only
         if: always()
-        run: |
-          if [ -f data/state/notices.sqlite3 ]; then
-            git status --short data/state/notices.sqlite3
-          fi
+        run: git status --short data/state/notices.sqlite3
