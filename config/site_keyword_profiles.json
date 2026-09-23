@@ -1,0 +1,107 @@
+{
+  "version": "site_keyword_profiles_v1",
+  "status": "research_only",
+  "scope": "用于分站样本分析；尚未接入线上判定，不修改冻结的 rules_v1",
+  "global": {
+    "positive_keywords": ["报名", "申请", "申报", "招募", "招聘", "征集", "选拔", "选聘", "推荐", "竞赛", "大赛", "奖学金", "助学金", "资助", "交换", "交流学习", "志愿服务", "社会实践", "讲座", "报告会", "训练营", "工作坊"],
+    "review_keywords": ["拟推荐", "拟录取", "拟聘用", "拟任人选", "名单公示", "结果公示", "入围名单", "录取名单", "立项名单", "获奖名单", "表彰结果", "实施细则", "管理办法"],
+    "negative_keywords": ["圆满举行", "圆满举办", "圆满落幕", "成功举办", "成功召开", "活动回顾", "喜报", "来访", "调研", "再创佳绩", "荣获佳绩", "斩获", "勇夺"],
+    "undergraduate_audience_keywords": ["本科生", "本科学生", "普通本科", "大学生", "全日制学生", "全体学生", "同学"],
+    "non_undergraduate_audience_keywords": ["面向教师", "全院教师", "教职工", "各位老师", "研究生专属", "仅限研究生", "博士生专项"]
+  },
+  "sites": {
+    "eis": {
+      "site_name": "武汉大学电子信息学院", "sample_count": 109,
+      "pattern": "栏目差异强；学生活动多为事后新闻，学工、本科生教育、讲座和留学栏目行动价值高。",
+      "positive_keywords": ["本科生", "大学生", "奖学金", "先进个人", "素质综合测评", "综测", "推免", "竞赛", "讲座", "学生助理", "招募", "报到注册", "导师双选", "留学", "交流项目"],
+      "review_keywords": ["拟推荐", "拟聘用", "名单公示", "推优入党", "增补工作人员"],
+      "negative_keywords": ["本科新生见面会", "研究生新生", "家长见面会", "迎新圆满落幕", "获批", "内设机构"],
+      "sources": {
+        "student_activity": {"prior": "negative", "negative_keywords": ["圆满举行", "顺利开展", "召开", "回顾", "见面会", "迎新"]},
+        "academic_lecture": {"prior": "positive", "positive_keywords": ["讲座公告", "报告", "论坛", "研讨会"]},
+        "student_notice": {"prior": "positive", "positive_keywords": ["评选", "测评", "注册", "助理", "奖学金", "放假安排"]},
+        "undergraduate_education": {"prior": "positive", "positive_keywords": ["本科生", "竞赛", "推免", "课程", "考试", "选课"]},
+        "study_abroad_notice": {"prior": "positive", "positive_keywords": ["交流", "交换", "留学", "项目"]}
+      }
+    },
+    "undergraduate_school": {
+      "site_name": "武汉大学本科生院", "sample_count": 82,
+      "pattern": "学生通知大多可行动；综合业务混有大量面向教师和教务管理人员的内部事务。",
+      "positive_keywords": ["学业预警", "教学安排调整", "英语水平测试", "学籍照片采集", "图像采集", "成绩认证", "免修申请", "本研贯通", "报到注册", "公共教室开放", "封楼", "毕业证明书", "学位证明书", "毕业证书", "学位证书", "试音", "中期退课", "课堂教学质量评价（学生）", "微专业", "创新学分", "大创", "大学生创新训练"],
+      "review_keywords": ["录取名单", "拟推荐名单", "获奖名单公示", "结题验收结果", "入驻结果", "冲抵课程学分结果", "推免工作实施细则"],
+      "negative_keywords": ["办公室主任", "值班", "研究生助教", "提交考试成绩", "报送会议材料", "课程思政项目", "课表编排", "教学研究项目", "本科教育质量建设综合改革项目", "产学合作协同育人项目", "武大通识3.0", "教学案例"],
+      "sources": {
+        "uc_student_notice": {"prior": "positive", "negative_keywords": ["提交考试成绩", "报送学士学位评定委员会会议材料"]},
+        "uc_general_business": {"prior": "mixed", "positive_keywords": ["教学安排调整", "封楼", "课堂教学质量评价（学生）", "大学生创业扶持"], "negative_keywords": ["教师", "值班", "课表编排", "课程建设", "项目验收"]}
+      }
+    },
+    "whu_main": {
+      "site_name": "武汉大学官网通知公告", "sample_count": 4,
+      "pattern": "综合性最强；既有学生机会，也有讲坛、校园运行、道路水电和全校行政通知。",
+      "positive_keywords": ["讲坛", "讲座", "预告", "学生", "大学生", "挑战杯", "竞赛", "报名", "招募", "放假", "服务保障", "公共资源开放", "停电", "停水", "道路封闭", "场馆开放", "试运行"],
+      "review_keywords": ["拟推报", "情况通报", "临时调整", "全校爱国卫生运动"],
+      "negative_keywords": ["采购公告", "招标公告", "干部任免", "会议纪要", "审计公告"],
+      "sources": {"whu_main_notice": {"prior": "mixed"}}
+    },
+    "student_aid": {
+      "site_name": "武汉大学学生资助管理中心", "sample_count": 15,
+      "pattern": "通知公告和勤助信息几乎都直接面向学生，站点本身就是强机会先验。",
+      "positive_keywords": ["国家奖学金", "励志奖学金", "助学金", "助学贷款", "困难学生认定", "家庭经济困难", "勤工助学", "劳酬", "学费补偿", "贷款代偿", "退役士兵", "信息登记", "招聘", "岗位", "临时困难补助", "专项资助", "国际交流项目"],
+      "review_keywords": ["名单公示", "到账通知", "政策调整", "管理办法"],
+      "negative_keywords": ["圆满结束", "顺利举行", "工作动态"],
+      "sources": {"student_aid_notice": {"prior": "positive"}, "student_aid_job": {"prior": "positive", "positive_keywords": ["招聘", "多人", "勤工助学"]}}
+    },
+    "youth_league": {
+      "site_name": "共青团武汉大学委员会（未来网）", "sample_count": 20,
+      "pattern": "招募、竞赛和实践机会密集，但通知公告与制度文件都混有大量已完成名单和表彰结果。",
+      "positive_keywords": ["补招", "招新", "招募", "竞赛", "大赛", "课题申报", "培训班", "未来学院", "志愿者", "志愿服务", "社会实践", "活动招标", "发展团员", "学生社团"],
+      "review_keywords": ["拟录取名单", "拟任人选", "补招人选", "入围名单", "获奖名单", "表彰结果", "推优入党", "成立委员会", "团支部成立", "换届"],
+      "negative_keywords": ["关于公布", "优秀组织单位", "优秀个人评选结果", "已结束"],
+      "sources": {"youth_notice": {"prior": "positive"}, "youth_policy": {"prior": "mixed", "negative_keywords": ["关于公布", "获奖名单", "表彰结果"], "positive_keywords": ["培训班", "发展团员", "社会实践", "学生社团"]}}
+    },
+    "second_classroom": {
+      "site_name": "武汉大学第二课堂", "sample_count": 24,
+      "pattern": "采集器已只保留报名或活动尚未结束的项目；标题不写“报名”也通常仍可参加。",
+      "positive_keywords": ["讲座", "竞赛", "大赛", "志愿", "实践", "招新", "训练营", "工作坊", "排练", "展演", "分享会", "宣讲", "社团文化节", "心理健康", "创新创业"],
+      "review_keywords": ["一年级计划", "新生教育", "年级大会", "迎新晚会", "院士第一课"],
+      "negative_keywords": ["拟推荐名单", "获奖名单", "结果公示"],
+      "sources": {
+        "second_classroom_1": {"prior": "positive"}, "second_classroom_2": {"prior": "positive"},
+        "second_classroom_3": {"prior": "positive"}, "second_classroom_4": {"prior": "positive"},
+        "second_classroom_5": {"prior": "positive"}, "second_classroom_6": {"prior": "positive"}
+      }
+    },
+    "international_office": {
+      "site_name": "武汉大学国际交流部", "sample_count": 11,
+      "pattern": "当前采集入口本身就是学生出国（境）项目，选派和申请类通知应视为强机会先验。",
+      "positive_keywords": ["选派", "申请参加", "校际交流", "交流学习", "交换", "公派", "访学", "寒假", "暑假", "冬季项目", "暑期项目", "春季赴", "秋季赴", "奖学金", "国际学生体验项目"],
+      "review_keywords": ["拟录取", "提名名单", "入选名单", "获奖名单"],
+      "negative_keywords": ["博士生奖学金", "仅限硕士研究生", "仅限博士研究生", "教师项目"],
+      "sources": {"study_abroad_notice": {"prior": "positive"}}
+    },
+    "service_center": {
+      "site_name": "武汉大学综合事务服务中心", "sample_count": 0,
+      "pattern": "更新频率低，主要是寒暑假开放、作息和办事安排；应按校园运行事务处理。",
+      "positive_keywords": ["开放通知", "逐步开放", "服务开放", "服务时间", "办理时间", "作息时间", "放暑假", "放寒假", "节假日安排", "疫情防控", "紧急通知"],
+      "review_keywords": ["服务调整", "办理地点", "窗口", "便民服务"],
+      "negative_keywords": ["值班表", "内部培训", "工作总结"],
+      "sources": {"service_notice": {"prior": "mixed"}}
+    },
+    "information_disclosure": {
+      "site_name": "武汉大学信息公开网", "sample_count": 0,
+      "pattern": "预算、审计、采购和治理信息占比高；只有直接涉及学生费用、资助、招生培养的内容优先。",
+      "positive_keywords": ["本科生", "学生", "奖学金", "助学金", "资助", "学费", "住宿费", "收费目录", "招生", "就业", "交流项目", "培养方案", "学生申诉"],
+      "review_keywords": ["管理办法", "实施细则", "信息公开年度报告", "收费标准"],
+      "negative_keywords": ["部门预算", "部门决算", "三公经费", "审计", "采购", "招标", "干部任免", "巡视整改", "国有资产", "校办企业"],
+      "sources": {"information_disclosure": {"prior": "negative"}}
+    },
+    "science_technology": {
+      "site_name": "武汉大学科学技术发展研究院", "sample_count": 9,
+      "pattern": "大多数通知面向教师、课题负责人和科研管理人员；“申报”在本站不能直接等同于本科生机会。",
+      "positive_keywords": ["本科生", "大学生", "青年学生", "学生项目", "学生招募", "实验室招募", "志愿者", "科普月", "开放日", "珞珈讲坛", "讲座"],
+      "review_keywords": ["科普活动", "公众开放", "学术报告", "科技奖励公示"],
+      "negative_keywords": ["国家自然科学基金", "国家重点研发计划", "项目申报指南", "申报指南", "科技奖拟提名", "知识产权代理", "成果转化", "项目计划书", "科研经费", "科研平台", "各有关单位"],
+      "sources": {"science_technology_notice": {"prior": "negative"}}
+    }
+  }
+}
