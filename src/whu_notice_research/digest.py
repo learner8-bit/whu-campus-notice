@@ -91,9 +91,18 @@ def render_text(digest: DailyDigest) -> str:
                 lines.append(f"   {excerpt}")
             lines.append(f"   原文：{notice.url}")
             for attachment in notice.attachments[:3]:
-                lines.append(f"   附件：{attachment.get('text') or '查看附件'} {attachment['url']}")
+                lines.append(f"   下载附件：{attachment.get('text') or '查看附件'} {attachment['url']}")
+                if attachment.get("highlights"):
+                    lines.append(f"   附件要点：{attachment['highlights'][:300]}")
+                elif attachment.get("status") in {"failed", "unsupported", "empty_or_scanned"}:
+                    lines.append("   附件未能自动解析，可点击链接在手机上查看或下载。")
             if len(notice.attachments) > 3:
                 lines.append(f"   另有 {len(notice.attachments) - 3} 个附件，请在原文查看。")
+            for link in [item for item in notice.links if item.get("kind") == "external"][:2]:
+                name = link.get("resolved_title") or link.get("text") or "外部报名页/官网"
+                lines.append(f"   外部链接：{name} {link['url']}")
+                if link.get("highlights"):
+                    lines.append(f"   页面要点：{link['highlights'][:300]}")
     lines.extend(("", "提示：规则筛选仍在完善；请以官网原文、报名条件和截止时间为准。"))
     return "\n".join(lines)
 
@@ -127,10 +136,23 @@ def render_html(digest: DailyDigest) -> str:
             if excerpt:
                 out.append(f"<p>{html.escape(excerpt)}</p>")
             if notice.attachments:
-                out.append("<p>附件：" + " · ".join(
+                out.append("<p>下载附件：" + " · ".join(
                     f'<a href="{html.escape(item["url"], quote=True)}">'
                     f'{html.escape(item.get("text") or "查看附件")}</a>'
                     for item in notice.attachments[:5]
+                ) + "</p>")
+                highlights = [
+                    item["highlights"] for item in notice.attachments[:5]
+                    if item.get("highlights")
+                ]
+                if highlights:
+                    out.append(f"<p>附件要点：{html.escape('；'.join(highlights)[:600])}</p>")
+            external = [item for item in notice.links if item.get("kind") == "external"][:3]
+            if external:
+                out.append("<p>报名页/竞赛官网：" + " · ".join(
+                    f'<a href="{html.escape(item["url"], quote=True)}">'
+                    f'{html.escape(item.get("resolved_title") or item.get("text") or "打开链接")}</a>'
+                    for item in external
                 ) + "</p>")
             out.append("</section>")
     out.append('<p style="color:#666">请以官网原文、报名条件和截止时间为准。</p></body></html>')
@@ -153,6 +175,20 @@ def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
             )
             if notice.fetch_error:
                 entry += "\n详情受官网验证限制，请打开原文确认"
+            for attachment in notice.attachments[:3]:
+                entry += (
+                    f"\n📎 下载附件：{attachment.get('text') or '查看附件'}"
+                    f"\n{attachment['url']}"
+                )
+                if attachment.get("highlights"):
+                    entry += f"\n附件要点：{attachment['highlights'][:180]}"
+                elif attachment.get("status") in {"failed", "unsupported", "empty_or_scanned"}:
+                    entry += "\n未自动解析，点击链接查看或下载"
+            for link in [item for item in notice.links if item.get("kind") == "external"][:2]:
+                name = link.get("resolved_title") or link.get("text") or "报名页/竞赛官网"
+                entry += f"\n🔗 {name}\n{link['url']}"
+                if link.get("highlights"):
+                    entry += f"\n页面要点：{link['highlights'][:180]}"
             entries.append(entry)
     if not entries:
         entries.append("今日暂无新增的有效候选信息。")

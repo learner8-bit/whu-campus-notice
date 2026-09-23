@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+from .enrichment import enrich_notices
 from .io import write_jsonl
 from .rules_v1 import RULESET_VERSION, decide
 from .sites import collect_site
@@ -36,6 +39,14 @@ def run_incremental(
                 known_urls=known,
                 incremental=bool(known),
             )
+            # Existing state means adapters returned only unseen notices. On a
+            # first bootstrap, enrich only notices published today so that a
+            # fresh deployment does not download months of historical files.
+            today = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+            enrichment_targets = notices if known else [
+                notice for notice in notices if notice.published_at == today
+            ]
+            enrich_notices(enrichment_targets)
             decisions = {
                 notice.notice_id: decide(
                     notice.title,
@@ -59,4 +70,3 @@ def run_incremental(
             empty = SyncResult()
             store.finish_run(run_id, empty, error=f"{type(exc).__name__}: {exc}")
             raise
-
