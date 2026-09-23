@@ -2,8 +2,8 @@ name: Wuhan University notice digest
 
 on:
   schedule:
-    - cron: '0 22 * * *'
-      timezone: 'Asia/Shanghai'
+    # GitHub cron uses UTC. 14:00 UTC = 22:00 Asia/Shanghai.
+    - cron: '0 14 * * *'
   workflow_dispatch:
 
 permissions:
