@@ -30,7 +30,6 @@ jobs:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_MODEL: deepseek-flash
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: Inspect state only
         if: always()
         run: git status --short data/state/notices.sqlite3
