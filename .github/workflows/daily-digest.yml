@@ -29,6 +29,9 @@ jobs:
       - name: Collect and send daily digest
         run: python scripts/daily_digest.py --send --channels feishu
         env:
+          AI_PROVIDER: deepseek
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: deepseek-flash
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: Persist notice and delivery history

@@ -151,7 +151,7 @@ class EnrichmentTests(unittest.TestCase):
         self.assertIn("报名截止", notice.summary)
         self.assertIn("全日制本科生", notice.summary)
 
-    def test_feishu_digest_contains_clickable_attachment_and_external_url(self) -> None:
+    def test_feishu_digest_uses_one_original_link_and_compact_fields(self) -> None:
         notice = Notice(
             source_id="uc_student_notice",
             source_name="学生通知",
@@ -172,12 +172,30 @@ class EnrichmentTests(unittest.TestCase):
                 "kind": "external",
                 "status": "parsed",
             }],
+            ai_analysis={
+                "schema_version": "ai_v1",
+                "actionable": True,
+                "audience_match": True,
+                "needs_review": False,
+                "category": "竞赛",
+                "deadline": "9月30日",
+                "value": "综测竞赛板块可能计分",
+                "materials": ["报名表"],
+                "summary": "完成报名后按要求参赛。",
+                "event_key": "2026测试竞赛",
+                "policy_basis": "通知原文",
+            },
         )
         message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
-        self.assertIn("下载附件：报名表.docx", message)
-        self.assertIn("https://uc.whu.edu.cn/download/1", message)
-        self.assertIn("竞赛官网", message)
-        self.assertIn("https://contest.example.org/", message)
+        self.assertIn("【竞赛】关于竞赛报名的通知", message)
+        self.assertIn("截止：9月30日", message)
+        self.assertIn("材料/附件：报名表、报名表.docx", message)
+        self.assertIn("原文：https://uc.whu.edu.cn/info/1.htm", message)
+        self.assertTrue(message.endswith("摘要：完成报名后按要求参赛。"))
+        self.assertNotIn("https://uc.whu.edu.cn/download/1", message)
+        self.assertNotIn("https://contest.example.org/", message)
+        self.assertNotIn("可信度", message)
+        self.assertNotIn("报名入口", message)
 
 
 if __name__ == "__main__":

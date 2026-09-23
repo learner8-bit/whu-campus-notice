@@ -32,6 +32,78 @@ def _title_key(value: str) -> str:
     return re.sub(r"[\W_]+", "", value, flags=re.UNICODE).casefold()
 
 
+def _effective_label(notice: Notice) -> str:
+    ai = notice.ai_analysis
+    if ai.get("schema_version"):
+        if ai.get("audience_match") is False or ai.get("actionable") is False:
+            return "filter"
+        if ai.get("needs_review") is True:
+            return "review"
+        return "keep"
+    return delivery_label(notice)
+
+
+def _dedupe_key(notice: Notice) -> str:
+    event_key = str(notice.ai_analysis.get("event_key") or "")
+    category = str(notice.ai_analysis.get("category") or "")
+    if event_key:
+        normalized = _title_key(category + event_key)
+        if normalized:
+            return "event:" + normalized
+    return "title:" + (_title_key(notice.title) or notice.notice_id)
+
+
+def _category(notice: Notice) -> str:
+    category = str(notice.ai_analysis.get("category") or "")
+    if category and category != "其他":
+        return category
+    title = notice.title
+    for name, words in (
+        ("竞赛", ("竞赛", "比赛", "大赛")),
+        ("奖学金", ("奖学金", "助学金")),
+        ("国际交流", ("交流", "交换", "访学")),
+        ("科研机会", ("科研", "实验室", "招募")),
+        ("学术讲座", ("讲座", "论坛", "报告")),
+        ("志愿服务", ("志愿", "志愿者")),
+        ("社会实践", ("实践",)),
+    ):
+        if any(word in title for word in words):
+            return name
+    return "通知"
+
+
+def _material_names(notice: Notice) -> list[str]:
+    names: list[str] = []
+    for value in notice.ai_analysis.get("materials", []):
+        text = str(value).strip()
+        if text and text not in names:
+            names.append(text)
+    for item in notice.attachments:
+        text = str(item.get("text") or "").strip()
+        if text and text not in names:
+            names.append(text)
+    return names[:6]
+
+
+def _compact_lines(notice: Notice, marker: str = "") -> list[str]:
+    prefix = f"{marker} " if marker else ""
+    lines = [f"{prefix}【{_category(notice)}】{notice.title}"]
+    deadline = str(notice.ai_analysis.get("deadline") or "").strip()
+    value = str(notice.ai_analysis.get("value") or "").strip()
+    materials = _material_names(notice)
+    if deadline:
+        lines.append(f"截止：{deadline}")
+    if value:
+        lines.append(f"价值：{value}")
+    if materials:
+        lines.append("材料/附件：" + "、".join(materials))
+    lines.append(f"原文：{notice.url}")
+    summary = str(notice.ai_analysis.get("summary") or "").strip() or _excerpt(notice, 100)
+    if summary:
+        lines.append(f"摘要：{summary}")
+    return lines
+
+
 def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -> DailyDigest:
     digest = DailyDigest(day=day, scan_status=scan_status)
     # Exact/small-punctuation title duplicates from different campus sites share
@@ -39,8 +111,8 @@ def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -
     preferred: dict[str, tuple[int, Notice]] = {}
     priority = {"filter": 0, "review": 1, "keep": 2}
     for notice in notices:
-        key = _title_key(notice.title) or notice.notice_id
-        rank = priority[delivery_label(notice)]
+        key = _dedupe_key(notice)
+        rank = priority[_effective_label(notice)]
         current = preferred.get(key)
         if current is None or (rank, len(notice.body_text)) > (
             current[0], len(current[1].body_text)
@@ -51,7 +123,7 @@ def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -
         key=lambda item: (item.published_at, item.title),
         reverse=True,
     ):
-        label = delivery_label(notice)
+        label = _effective_label(notice)
         if label == "keep":
             digest.keep.append(notice)
         elif label == "review":
@@ -71,39 +143,18 @@ def _excerpt(notice: Notice, limit: int = 160) -> str:
 def render_text(digest: DailyDigest) -> str:
     lines = [
         digest.title,
-        f"今日发现：值得关注 {len(digest.keep)} 条，待复核 {len(digest.review)} 条；明显无关 {digest.filtered_count} 条。",
+        f"值得关注 {len(digest.keep)}｜待复核 {len(digest.review)}",
     ]
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
-        lines.append("注意：以下站点本次采集失败，日报可能不完整：" + "、".join(failures))
+        lines.append("采集失败：" + "、".join(failures))
     if not digest.candidate_count:
         lines.append("今日暂无新增的有效候选信息。")
-    for heading, rows in (("值得关注", digest.keep), ("待复核（可能有用）", digest.review)):
-        if not rows:
-            continue
-        lines.append("")
-        lines.append(f"【{heading}】")
-        for index, notice in enumerate(rows, 1):
-            lines.append(f"{index}. {notice.title}")
-            lines.append(f"   {notice.site_name} / {notice.source_name} · 发布于 {notice.published_at}")
-            excerpt = _excerpt(notice)
-            if excerpt:
-                lines.append(f"   {excerpt}")
-            lines.append(f"   原文：{notice.url}")
-            for attachment in notice.attachments[:3]:
-                lines.append(f"   下载附件：{attachment.get('text') or '查看附件'} {attachment['url']}")
-                if attachment.get("highlights"):
-                    lines.append(f"   附件要点：{attachment['highlights'][:300]}")
-                elif attachment.get("status") in {"failed", "unsupported", "empty_or_scanned"}:
-                    lines.append("   附件未能自动解析，可点击链接在手机上查看或下载。")
-            if len(notice.attachments) > 3:
-                lines.append(f"   另有 {len(notice.attachments) - 3} 个附件，请在原文查看。")
-            for link in [item for item in notice.links if item.get("kind") == "external"][:2]:
-                name = link.get("resolved_title") or link.get("text") or "外部报名页/官网"
-                lines.append(f"   外部链接：{name} {link['url']}")
-                if link.get("highlights"):
-                    lines.append(f"   页面要点：{link['highlights'][:300]}")
-    lines.extend(("", "提示：规则筛选仍在完善；请以官网原文、报名条件和截止时间为准。"))
+    for marker, rows in (("✅", digest.keep), ("🔎", digest.review)):
+        for notice in rows:
+            lines.append("")
+            lines.extend(_compact_lines(notice, marker))
+    lines.extend(("", "请以官网原文为准。"))
     return "\n".join(lines)
 
 
@@ -112,50 +163,29 @@ def render_html(digest: DailyDigest) -> str:
         '<!doctype html><html lang="zh-CN"><meta charset="utf-8">',
         '<body style="font:15px/1.65 Arial,sans-serif;max-width:760px;margin:28px auto;color:#222">',
         f'<h1 style="font-size:24px">{html.escape(digest.title)}</h1>',
-        f'<p>值得关注 {len(digest.keep)} 条 · 待复核 {len(digest.review)} 条 · 已过滤 {digest.filtered_count} 条</p>',
+        f'<p>值得关注 {len(digest.keep)} 条 · 待复核 {len(digest.review)} 条</p>',
     ]
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
-        out.append('<p style="color:#a35b00">部分站点采集失败：' + html.escape("、".join(failures)) + "；日报可能不完整。</p>")
+        out.append('<p style="color:#a35b00">采集失败：' + html.escape("、".join(failures)) + "</p>")
     if not digest.candidate_count:
         out.append("<p>今日暂无新增的有效候选信息。</p>")
-    for heading, rows in (("值得关注", digest.keep), ("待复核（可能有用）", digest.review)):
+    for heading, rows in (("值得关注", digest.keep), ("待复核", digest.review)):
         if not rows:
             continue
         out.append(f"<h2>{heading}</h2>")
         for notice in rows:
-            url = html.escape(notice.url, quote=True)
+            compact = _compact_lines(notice)
             out.append('<section style="padding:14px 0;border-top:1px solid #ddd">')
-            out.append(f'<h3 style="margin:0 0 4px"><a href="{url}">{html.escape(notice.title)}</a></h3>')
-            out.append(
-                '<small style="color:#666">'
-                + html.escape(f"{notice.site_name} / {notice.source_name} · 发布于 {notice.published_at}")
-                + "</small>"
-            )
-            excerpt = _excerpt(notice, 260)
-            if excerpt:
-                out.append(f"<p>{html.escape(excerpt)}</p>")
-            if notice.attachments:
-                out.append("<p>下载附件：" + " · ".join(
-                    f'<a href="{html.escape(item["url"], quote=True)}">'
-                    f'{html.escape(item.get("text") or "查看附件")}</a>'
-                    for item in notice.attachments[:5]
-                ) + "</p>")
-                highlights = [
-                    item["highlights"] for item in notice.attachments[:5]
-                    if item.get("highlights")
-                ]
-                if highlights:
-                    out.append(f"<p>附件要点：{html.escape('；'.join(highlights)[:600])}</p>")
-            external = [item for item in notice.links if item.get("kind") == "external"][:3]
-            if external:
-                out.append("<p>报名页/竞赛官网：" + " · ".join(
-                    f'<a href="{html.escape(item["url"], quote=True)}">'
-                    f'{html.escape(item.get("resolved_title") or item.get("text") or "打开链接")}</a>'
-                    for item in external
-                ) + "</p>")
+            out.append(f'<h3 style="margin:0 0 4px">{html.escape(compact[0])}</h3>')
+            for line in compact[1:]:
+                if line.startswith("原文："):
+                    url = html.escape(notice.url, quote=True)
+                    out.append(f'<p><a href="{url}">原文</a></p>')
+                else:
+                    out.append(f"<p>{html.escape(line)}</p>")
             out.append("</section>")
-    out.append('<p style="color:#666">请以官网原文、报名条件和截止时间为准。</p></body></html>')
+    out.append('<p style="color:#666">请以官网原文为准。</p></body></html>')
     return "".join(out)
 
 
@@ -168,28 +198,7 @@ def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
     entries: list[str] = []
     for marker, rows in (("✅", digest.keep), ("🔎", digest.review)):
         for notice in rows:
-            entry = (
-                f"{marker} {notice.title}\n"
-                f"{notice.site_name}/{notice.source_name} · {notice.published_at}\n"
-                f"{notice.url}"
-            )
-            if notice.fetch_error:
-                entry += "\n详情受官网验证限制，请打开原文确认"
-            for attachment in notice.attachments[:3]:
-                entry += (
-                    f"\n📎 下载附件：{attachment.get('text') or '查看附件'}"
-                    f"\n{attachment['url']}"
-                )
-                if attachment.get("highlights"):
-                    entry += f"\n附件要点：{attachment['highlights'][:180]}"
-                elif attachment.get("status") in {"failed", "unsupported", "empty_or_scanned"}:
-                    entry += "\n未自动解析，点击链接查看或下载"
-            for link in [item for item in notice.links if item.get("kind") == "external"][:2]:
-                name = link.get("resolved_title") or link.get("text") or "报名页/竞赛官网"
-                entry += f"\n🔗 {name}\n{link['url']}"
-                if link.get("highlights"):
-                    entry += f"\n页面要点：{link['highlights'][:180]}"
-            entries.append(entry)
+            entries.append("\n".join(_compact_lines(notice, marker)))
     if not entries:
         entries.append("今日暂无新增的有效候选信息。")
     parts: list[str] = []

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from whu_notice_research.ai_analysis import AIConfig, attach_ai_analyses  # noqa: E402
 from whu_notice_research.digest import (  # noqa: E402
     build_digest,
     content_hash,
@@ -53,6 +54,10 @@ def main() -> int:
         parser.error("--preview-latest cannot be sent; it contains historical notices")
 
     load_env_file(ROOT / ".env")
+    try:
+        ai_config = AIConfig.from_environment()
+    except ValueError as exc:
+        parser.error(str(exc))
     delivery = None
     if args.send:
         try:
@@ -93,8 +98,19 @@ def main() -> int:
             notices = (full.keep + full.review)[: args.preview_latest]
         else:
             notices = store.first_seen_on(day) + store.published_on(day) + baseline_today
-        unique = {item.notice_id: item for item in notices}
-        digest = build_digest(day, list(unique.values()), scan_status)
+        unique = list({item.notice_id: item for item in notices}.values())
+        ai_stats = attach_ai_analyses(
+            unique,
+            store,
+            ai_config,
+            project_root=ROOT,
+            allow_network=not bool(args.preview_latest),
+        )
+        print(
+            f"ai: analyzed={ai_stats.analyzed} cached={ai_stats.cached} "
+            f"failed={ai_stats.failed} disabled={ai_stats.disabled}"
+        )
+        digest = build_digest(day, unique, scan_status)
         plain = render_text(digest)
         html_body = render_html(digest)
         args.output_dir.mkdir(parents=True, exist_ok=True)

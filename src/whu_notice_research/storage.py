@@ -92,6 +92,16 @@ class NoticeStore:
                 sent_at TEXT NOT NULL,
                 PRIMARY KEY(day, channel, digest_hash)
             );
+            CREATE TABLE IF NOT EXISTS ai_analyses (
+                notice_id TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                analysis_json TEXT NOT NULL,
+                analyzed_at TEXT NOT NULL,
+                PRIMARY KEY(notice_id, content_hash, provider, model, prompt_version)
+            );
             """
         )
         columns = {
@@ -266,6 +276,47 @@ class NoticeStore:
             (limit,),
         )
         return [Notice.from_dict(json.loads(row["payload_json"])) for row in rows]
+
+    def get_ai_analysis(
+        self,
+        notice: Notice,
+        *,
+        provider: str,
+        model: str,
+        prompt_version: str,
+    ) -> dict | None:
+        row = self.connection.execute(
+            "SELECT analysis_json FROM ai_analyses "
+            "WHERE notice_id=? AND content_hash=? AND provider=? AND model=? "
+            "AND prompt_version=?",
+            (notice.notice_id, notice.content_hash, provider, model, prompt_version),
+        ).fetchone()
+        return json.loads(row["analysis_json"]) if row else None
+
+    def save_ai_analysis(
+        self,
+        notice: Notice,
+        analysis: dict,
+        *,
+        provider: str,
+        model: str,
+        prompt_version: str,
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT OR REPLACE INTO ai_analyses("
+                "notice_id, content_hash, provider, model, prompt_version, "
+                "analysis_json, analyzed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    notice.notice_id,
+                    notice.content_hash,
+                    provider,
+                    model,
+                    prompt_version,
+                    json.dumps(analysis, ensure_ascii=False, sort_keys=True),
+                    now_shanghai(),
+                ),
+            )
 
     def published_on(self, day: str) -> list[Notice]:
         """Include same-day announcements even when historical data was pre-imported."""

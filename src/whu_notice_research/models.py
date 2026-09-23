@@ -24,6 +24,9 @@ class Notice:
     fetch_error: str = ""
     site_id: str = "eis"
     site_name: str = "武汉大学电子信息学院"
+    # Runtime AI result. Cached separately so prompt/model changes do not make
+    # an unchanged source notice look updated.
+    ai_analysis: dict = field(default_factory=dict)
 
     @property
     def notice_id(self) -> str:
@@ -34,6 +37,7 @@ class Notice:
         stable = self.to_dict()
         stable.pop("fetched_at", None)
         stable.pop("fetch_error", None)
+        stable.pop("ai_analysis", None)
         payload = json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
