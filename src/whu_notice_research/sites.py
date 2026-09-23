@@ -4,13 +4,22 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-from .adapters import undergraduate_school
+from .adapters import generic_vsb, second_classroom, undergraduate_school
 from .eis import Source as EisSource
 from .eis import collect_all as collect_eis
 from .models import Notice
 
 
-SUPPORTED_SITES = {"eis", "undergraduate_school"}
+GENERIC_SITES = {
+    "whu_main",
+    "student_aid",
+    "youth_league",
+    "international_office",
+    "service_center",
+    "information_disclosure",
+    "science_technology",
+}
+SUPPORTED_SITES = {"eis", "undergraduate_school", "second_classroom", *GENERIC_SITES}
 
 
 def collect_site(
@@ -36,6 +45,30 @@ def collect_site(
         with path.open("r", encoding="utf-8") as handle:
             sources = [undergraduate_school.Source(**row) for row in json.load(handle)]
         return undergraduate_school.collect_all(
+            sources,
+            date.today() - timedelta(days=days),
+            known_urls=known_urls,
+            incremental=incremental,
+        )
+    if site_id == "second_classroom":
+        return second_classroom.collect_all(
+            date.today() - timedelta(days=days),
+            known_urls=known_urls,
+            incremental=incremental,
+        )
+    if site_id in GENERIC_SITES:
+        path = project_root / "config" / "campus_sources.json"
+        with path.open("r", encoding="utf-8") as handle:
+            group = json.load(handle)[site_id]
+        sources = [
+            generic_vsb.Source(
+                **row,
+                site_id=site_id,
+                site_name=group["site_name"],
+            )
+            for row in group["sources"]
+        ]
+        return generic_vsb.collect_all(
             sources,
             date.today() - timedelta(days=days),
             known_urls=known_urls,

@@ -222,10 +222,29 @@ def fetch_text(url: str, *, timeout: float = 30.0, retries: int = 3) -> tuple[st
                     if "/system/resource/visitcode/" in urlparse(resolved_url).path:
                         raise BlockedPageError(f"verification page: {resolved_url}")
                     raw = response.read()
-                    encoding = response.headers.get_content_charset() or "utf-8"
-                    try:
-                        text = raw.decode(encoding)
-                    except (LookupError, UnicodeDecodeError):
+                    header_encoding = response.headers.get_content_charset()
+                    head = raw[:4096].decode("ascii", errors="ignore")
+                    meta_match = re.search(
+                        r"charset\s*=\s*[\"']?([\w-]+)", head, re.I
+                    )
+                    encodings = [
+                        value
+                        for value in (
+                            meta_match.group(1) if meta_match else None,
+                            header_encoding,
+                            "utf-8",
+                            "gb18030",
+                        )
+                        if value
+                    ]
+                    text = ""
+                    for encoding in dict.fromkeys(encodings):
+                        try:
+                            text = raw.decode(encoding)
+                            break
+                        except (LookupError, UnicodeDecodeError):
+                            continue
+                    if not text:
                         text = raw.decode("utf-8", errors="replace")
                     return text, resolved_url
             except (HTTPError, URLError, TimeoutError) as exc:

@@ -1,0 +1,127 @@
+{
+  "whu_main": {
+    "site_name": "武汉大学官网通知公告",
+    "sources": [
+      {
+        "id": "whu_main_notice",
+        "name": "通知公告",
+        "url": "https://www.whu.edu.cn/tzgg.htm",
+        "include_url_regex": "www\\.whu\\.edu\\.cn/(?:info/5231/|new2024/tzggnr\\.jsp)"
+      }
+    ]
+  },
+  "student_aid": {
+    "site_name": "武汉大学学生资助管理中心",
+    "sources": [
+      {
+        "id": "student_aid_notice",
+        "name": "通知公告",
+        "url": "https://zzgl.whu.edu.cn/tzgg.htm",
+        "include_url_regex": "zzgl\\.whu\\.edu\\.cn/(?:info/1019/|content\\.jsp\\?.*wbtreeid=1019)"
+      },
+      {
+        "id": "student_aid_job",
+        "name": "勤助信息",
+        "url": "https://zzgl.whu.edu.cn/qzxx.htm",
+        "include_url_regex": "zzgl\\.whu\\.edu\\.cn/(?:info/1020/|content\\.jsp\\?.*wbtreeid=1020)"
+      }
+    ]
+  },
+  "youth_league": {
+    "site_name": "共青团武汉大学委员会（未来网）",
+    "sources": [
+      {
+        "id": "youth_notice",
+        "name": "通知公告",
+        "url": "https://future.whu.edu.cn/",
+        "include_url_regex": "future\\.whu\\.edu\\.cn/content\\.jsp\\?.*wbtreeid=1007"
+      },
+      {
+        "id": "youth_policy",
+        "name": "制度文件",
+        "url": "https://future.whu.edu.cn/",
+        "include_url_regex": "future\\.whu\\.edu\\.cn/content\\.jsp\\?.*wbtreeid=1006"
+      }
+    ]
+  },
+  "international_office": {
+    "site_name": "武汉大学国际交流部",
+    "sources": [
+      {
+        "id": "study_abroad_notice",
+        "name": "国家公派项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/gjgpxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1191/|content\\.jsp\\?.*wbtreeid=1191)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "亚洲项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/xq_n_jlxm/yzxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1193/|content\\.jsp\\?.*wbtreeid=1193)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "欧洲项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/xq_n_jlxm/ozxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1194/|content\\.jsp\\?.*wbtreeid=1194)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "美洲大洋洲项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/xq_n_jlxm/mzdyzxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1195/|content\\.jsp\\?.*wbtreeid=1195)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "非洲项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/xq_n_jlxm/fzxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1196/|content\\.jsp\\?.*wbtreeid=1196)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "港澳台地区项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/xq_n_jlxm/gatdqxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1197/|content\\.jsp\\?.*wbtreeid=1197)"
+      },
+      {
+        "id": "study_abroad_notice",
+        "name": "短期及其他项目",
+        "url": "https://oir.whu.edu.cn/hwxxxm1/dqxm.htm",
+        "include_url_regex": "oir\\.whu\\.edu\\.cn/(?:info/1198/|content\\.jsp\\?.*wbtreeid=1198)"
+      }
+    ]
+  },
+  "service_center": {
+    "site_name": "武汉大学综合事务服务中心",
+    "sources": [
+      {
+        "id": "service_notice",
+        "name": "通知公告",
+        "url": "https://service.whu.edu.cn/tzgg.htm",
+        "include_url_regex": "service\\.whu\\.edu\\.cn/info/1012/"
+      }
+    ]
+  },
+  "information_disclosure": {
+    "site_name": "武汉大学信息公开网",
+    "sources": [
+      {
+        "id": "information_disclosure",
+        "name": "最新公开（本站内容）",
+        "url": "https://info.whu.edu.cn/gz/zxgk.htm",
+        "include_url_regex": "info\\.whu\\.edu\\.cn/info/"
+      }
+    ]
+  },
+  "science_technology": {
+    "site_name": "武汉大学科学技术发展研究院",
+    "sources": [
+      {
+        "id": "science_technology_notice",
+        "name": "通知公告",
+        "url": "https://kfy.whu.edu.cn/kjdh/tzgg.htm",
+        "include_url_regex": "kfy\\.whu\\.edu\\.cn/(?:info/1026/|xwxqy\\.jsp\\?.*wbtreeid=1026)"
+      }
+    ]
+  }
+}
