@@ -72,6 +72,26 @@ Write-Step "Waiting for the cloud job to finish"
 $watchExit = $LASTEXITCODE
 
 if ($watchExit -ne 0) {
+    Write-Host "The local GitHub connection was interrupted. Rechecking the same cloud run..." -ForegroundColor Yellow
+    $conclusion = ""
+    for ($attempt = 1; $attempt -le 60; $attempt++) {
+        $stateRaw = & gh run view $run.databaseId --repo $Repository --json status,conclusion 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $state = $stateRaw | ConvertFrom-Json
+            if ($state.status -eq "completed") {
+                $conclusion = $state.conclusion
+                break
+            }
+        }
+        Start-Sleep -Seconds 5
+    }
+    if ($conclusion -eq "success") {
+        $watchExit = 0
+        Write-Host "The cloud run succeeded; only the local status connection was interrupted." -ForegroundColor Green
+    }
+}
+
+if ($watchExit -ne 0) {
     Write-Host ""
     Write-Host "The cloud job failed. Failed-step logs follow:" -ForegroundColor Red
     & gh run view $run.databaseId --repo $Repository --log-failed
