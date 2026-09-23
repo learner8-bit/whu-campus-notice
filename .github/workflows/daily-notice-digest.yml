@@ -35,7 +35,6 @@ jobs:
       - name: Collect and send daily digest
         env:
           AI_PROVIDER: deepseek
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_MODEL: deepseek-flash
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           FORCE_SEND: ${{ inputs.force_send || 'false' }}
