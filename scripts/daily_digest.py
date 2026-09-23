@@ -132,7 +132,7 @@ def main() -> int:
             health_issues.append(
                 HealthIssue("ai", ai_config.model, f"{ai_stats.failed} 条通知分析失败")
             )
-        if unique and not ai_config.enabled:
+        if unique and ai_config is None:
             health_issues.append(
                 HealthIssue("ai", "DeepSeek", "AI_API_KEY 未生效，已退回规则筛选")
             )
