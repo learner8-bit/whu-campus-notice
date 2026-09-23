@@ -128,7 +128,7 @@ def main() -> int:
             f"ai: analyzed={ai_stats.analyzed} cached={ai_stats.cached} "
             f"failed={ai_stats.failed} disabled={ai_stats.disabled}"
         )
-        if ai_config.enabled and ai_stats.failed:
+        if ai_config is not None and ai_stats.failed:
             health_issues.append(
                 HealthIssue("ai", ai_config.model, f"{ai_stats.failed} 条通知分析失败")
             )
