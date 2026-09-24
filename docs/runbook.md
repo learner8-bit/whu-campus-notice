@@ -24,7 +24,7 @@ python scripts/show_new_today.py --site undergraduate_school
 python -m unittest discover -s tests -v
 ```
 
-默认回看 30 天，可用 `--days` 调整。采集器遍历窗口内列表，已成功入库的通知不重新抓取详情；详情失败的记录在回看窗口内可以重试。`data/runs/<site>_new.jsonl` 仅保存最近一次运行新增的记录；完整历史与首次发现时间保存在 `data/state/notices.sqlite3`。`show_new_today.py --day YYYY-MM-DD` 查询北京时间指定日期首次发现的在线新增通知，不包括一次性历史导入。首次运行如无历史库会建立基线，避免把历史通知报为当天新增。
+默认回看 3 天，可用 `--days` 调整。采集器遍历窗口内列表，已成功入库的通知不重新抓取详情；详情失败的记录在回看窗口内可以重试。`data/runs/<site>_new.jsonl` 仅保存最近一次运行新增的记录；完整历史与首次发现时间保存在 `data/state/notices.sqlite3`，默认保留 90 天。`show_new_today.py --day YYYY-MM-DD` 查询北京时间指定日期首次发现的在线新增通知，不包括一次性历史导入。首次运行如无历史库会建立基线，避免把历史通知报为当天新增。
 
 `Notice` 字段统一包含站点、栏目、发布时间、标题、规范 URL、摘要、详情标题/栏目、正文、附件引用、正文链接、抓取时间及抓取错误。新增网站时实现单独适配器，在 `sites.py` 注册；规则和 SQLite 不依赖网站的 HTML 结构。
 

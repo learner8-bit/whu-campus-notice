@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +17,50 @@ from whu_notice_research.storage import NoticeStore  # noqa: E402
 
 
 class StorageTests(unittest.TestCase):
+    def test_delivery_completion_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, NoticeStore(
+            Path(directory) / "state.sqlite3"
+        ) as store:
+            self.assertFalse(store.delivery_complete("2026-09-24", "feishu"))
+            store.mark_delivery_complete("2026-09-24", "feishu")
+            self.assertTrue(store.delivery_complete("2026-09-24", "feishu"))
+
+    def test_prune_history_keeps_only_retention_window(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, NoticeStore(
+            Path(directory) / "state.sqlite3"
+        ) as store:
+            old = Notice(
+                "old", "通知", "2026-01-01", "旧通知",
+                "https://example.edu/old", site_id="test",
+            )
+            recent = Notice(
+                "recent", "通知", "2026-09-20", "新通知",
+                "https://example.edu/recent", site_id="test",
+            )
+            run_id = store.start_run("test", "incremental")
+            result = store.sync(
+                [old, recent],
+                {
+                    old.notice_id: decide(old.title),
+                    recent.notice_id: decide(recent.title),
+                },
+                ruleset_version=RULESET_VERSION,
+                run_id=run_id,
+            )
+            store.finish_run(run_id, result)
+            store.connection.execute(
+                "UPDATE notices SET first_seen_at='2026-01-01T00:00:00+08:00' "
+                "WHERE notice_id=?",
+                (old.notice_id,),
+            )
+            store.record_delivery("2026-01-01", "feishu", "old")
+            store.record_delivery("2026-09-24", "feishu", "recent")
+            removed = store.prune_history(90, today=date(2026, 9, 24))
+            self.assertEqual(removed["notices"], 1)
+            self.assertEqual(store.count(), 1)
+            self.assertFalse(store.was_delivered("2026-01-01", "feishu", "old"))
+            self.assertTrue(store.was_delivered("2026-09-24", "feishu", "recent"))
+
     def test_new_unchanged_and_updated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"

@@ -37,7 +37,7 @@ class AIConfig:
     base_url: str
     model: str
     user_profile: str
-    timeout_seconds: int = 60
+    timeout_seconds: int = 120
 
     @classmethod
     def from_environment(cls) -> "AIConfig | None":

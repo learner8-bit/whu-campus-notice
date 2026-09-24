@@ -2,8 +2,13 @@ name: Wuhan University notice digest
 
 on:
   schedule:
-    # GitHub cron uses UTC. 14:00 UTC = 22:00 Asia/Shanghai.
-    - cron: '0 14 * * *'
+    # GitHub cron uses UTC. The first run queues at 20:43 Beijing time,
+    # prepares the runner, then waits locally until 22:00.
+    - cron: '43 12 * * *'
+    # Compensation attempts: 22:11, 22:41 and 23:11 Beijing time.
+    - cron: '11 14 * * *'
+    - cron: '41 14 * * *'
+    - cron: '11 15 * * *'
   workflow_dispatch:
     inputs:
       force_send:
@@ -32,7 +37,7 @@ concurrency:
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
         with:
@@ -42,7 +47,46 @@ jobs:
           python-version: '3.13'
       - name: Install document parser
         run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Prepare scheduled send window
+        id: send_window
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          local_hhmm="$(TZ=Asia/Shanghai date +%H%M)"
+          local_value=$((10#$local_hhmm))
+          if [ "$local_value" -lt 2043 ] || [ "$local_value" -gt 2330 ]; then
+            echo "Scheduled run is outside 20:43-23:30 Asia/Shanghai; skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_SCHEDULE" = "43 12 * * *" ] && [ "$local_value" -lt 2200 ]; then
+            target_epoch="$(TZ=Asia/Shanghai date -d "$(TZ=Asia/Shanghai date +%F) 22:00:00" +%s)"
+            now_epoch="$(date +%s)"
+            wait_seconds=$((target_epoch - now_epoch))
+            if [ "$wait_seconds" -gt 0 ]; then
+              echo "Runner ready; waiting ${wait_seconds}s for 22:00 Asia/Shanghai."
+              sleep "$wait_seconds"
+            fi
+          fi
+
+          local_hhmm="$(TZ=Asia/Shanghai date +%H%M)"
+          local_value=$((10#$local_hhmm))
+          if [ "$local_value" -lt 2200 ] || [ "$local_value" -gt 2330 ]; then
+            echo "Send window is closed; skipping."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Collect and send daily digest
+        if: ${{ steps.send_window.outputs.should_run == 'true' }}
         continue-on-error: ${{ inputs.diagnostic_only == true }}
         env:
           AI_PROVIDER: deepseek
@@ -53,7 +97,10 @@ jobs:
           DIGEST_DAY: ${{ inputs.digest_day || '' }}
           DIAGNOSTIC_ONLY: ${{ inputs.diagnostic_only || 'false' }}
         run: |
-          EXTRA_ARGS="--channels feishu"
+          EXTRA_ARGS="--channels feishu --retention-days 90"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --skip-if-complete"
+          fi
           if [ "$DIAGNOSTIC_ONLY" != "true" ]; then
             EXTRA_ARGS="$EXTRA_ARGS --send"
           fi
@@ -65,7 +112,7 @@ jobs:
           fi
           python scripts/daily_digest.py $EXTRA_ARGS
       - name: Notify unexpected workflow failure
-        if: ${{ failure() && env.HEALTH_ALERT_SENT != 'true' && inputs.diagnostic_only != true }}
+        if: ${{ failure() && steps.send_window.outputs.should_run == 'true' && env.HEALTH_ALERT_SENT != 'true' && inputs.diagnostic_only != true }}
         continue-on-error: true
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}

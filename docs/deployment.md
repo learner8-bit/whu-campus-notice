@@ -12,20 +12,20 @@
 
 ## GitHub Actions
 
-项目已有 `.github/workflows/daily-digest.yml`，每天北京时间约 22:00 运行，也可在 Actions 页面手动触发。GitHub 的定时任务可能延迟，并非严格的秒级闹钟。[GitHub 官方文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onschedule)说明了 `timezone` 用法。
+项目已有 `.github/workflows/daily-notice-digest.yml`。主任务在北京时间 20:43 排队并等待至 22:00 发送；22:11、22:41、23:11 各有一次补偿任务，23:30 后停止当天发送。任一轮成功后会记录完成标记，其余补偿任务直接跳过。也可在 Actions 页面手动触发。
 
-1. 项目已部署到 GitHub 仓库，默认分支包含工作流、代码和 `data/state/notices.sqlite3`。建议保持仓库私有，避免公开镜像通知正文和附件地址。
+1. 项目部署在公开 GitHub 仓库，默认分支包含工作流、代码和 `data/state/notices.sqlite3`。数据库仅保存公开通知内容和发送状态；Webhook、API Key 和本地 `.env` 不得提交。
 2. 仓库已配置 `FEISHU_WEBHOOK_URL` Actions Secret；若机器人以后启用签名校验，再添加 `FEISHU_SECRET`。凭据仅保存在 GitHub Secrets，不要提交 `.env`。[GitHub Secrets 官方说明](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)。
 3. 确认仓库允许 Actions，且工作流有 `contents: write` 权限；首次可用 `workflow_dispatch` 手动触发。运行后查看飞书与 Actions 日志。
 
-工作流会把公开通知的 SQLite 历史库和发送成功记录提交回默认分支，供下一次云端运行去重。若仓库保护规则禁止机器人直接推送，需要为状态库另选持久存储或调整仓库规则。推送状态失败可能导致下一次重发；渠道发送本身不支持原子事务，这是当前 V1 的边界。建议私有仓库，避免公开镜像通知正文和附件地址。
+工作流会把公开通知的 SQLite 历史库和发送成功记录提交回默认分支，供下一次云端运行去重。历史数据默认保留 90 天。若仓库保护规则禁止机器人直接推送，需要为状态库另选持久存储或调整仓库规则。
 
 
 ## DeepSeek 与政策知识库
 
 每日任务仅对新增或内容变化的通知调用 DeepSeek，发送范围为公开通知标题、正文、附件提取文字、外部页面提取文字，以及与该通知关键词匹配的已核验政策摘录。不会发送飞书密钥、SQLite 数据库、原始 PDF 或本地文件。
 
-在仓库 Settings → Secrets and variables → Actions 中增加 AI_API_KEY。工作流固定使用 AI_PROVIDER=deepseek、AI_MODEL=deepseek-flash；密钥缺失或接口失败时自动退回原有规则筛选。AI 结果按通知内容哈希、模型和提示词版本写入 SQLite 缓存，同一内容不会重复付费。
+在仓库 Settings → Secrets and variables → Actions 中增加 AI_API_KEY。工作流固定使用 AI_PROVIDER=deepseek、AI_MODEL=deepseek-flash；每次请求最多等待 120 秒，失败后最多重试 2 次，最终失败时自动发送无 AI 的规则筛选原文速览。AI 结果按通知内容哈希、模型和提示词版本写入 SQLite 缓存，同一内容不会重复付费。
 
 目标用户画像为武汉大学电子信息学院 2025 级电子信息本科生，目前大二。政策事实保存在 config/policy_rules.json，每条均带来源文件和页码。2024 年综测细则可用于当前比对；现有推免文件仅适用于 2026 届，对 2025 级只能显示为往届参考，不能作为未来确定分值。
 

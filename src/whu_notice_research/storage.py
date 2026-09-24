@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 from zoneinfo import ZoneInfo
@@ -262,6 +262,12 @@ class NoticeStore:
         ).fetchone()
         return row is not None
 
+    def delivery_complete(self, day: str, channel: str) -> bool:
+        return self.was_delivered(day, f"{channel}-complete", "complete")
+
+    def mark_delivery_complete(self, day: str, channel: str) -> None:
+        self.record_delivery(day, f"{channel}-complete", "complete")
+
     def record_delivery(self, day: str, channel: str, digest_hash: str) -> None:
         with self.connection:
             self.connection.execute(
@@ -269,6 +275,46 @@ class NoticeStore:
                 "VALUES (?, ?, ?, ?)",
                 (day, channel, digest_hash, now_shanghai()),
             )
+
+    def prune_history(
+        self,
+        retention_days: int = 90,
+        *,
+        today: date | None = None,
+    ) -> dict[str, int]:
+        """Remove state older than the configured retention window."""
+        if retention_days < 1:
+            raise ValueError("retention_days must be positive")
+        cutoff = ((today or datetime.now(SHANGHAI).date()) - timedelta(
+            days=retention_days
+        )).isoformat()
+        with self.connection:
+            analyses = self.connection.execute(
+                "DELETE FROM ai_analyses WHERE notice_id IN ("
+                "SELECT notice_id FROM notices WHERE substr(first_seen_at, 1, 10) < ?"
+                ")",
+                (cutoff,),
+            ).rowcount
+            notices = self.connection.execute(
+                "DELETE FROM notices WHERE substr(first_seen_at, 1, 10) < ?",
+                (cutoff,),
+            ).rowcount
+            deliveries = self.connection.execute(
+                "DELETE FROM deliveries WHERE day < ?",
+                (cutoff,),
+            ).rowcount
+            runs = self.connection.execute(
+                "DELETE FROM runs WHERE substr(started_at, 1, 10) < ? "
+                "AND NOT EXISTS (SELECT 1 FROM notices "
+                "WHERE first_run_id=runs.run_id OR last_run_id=runs.run_id)",
+                (cutoff,),
+            ).rowcount
+        return {
+            "notices": notices,
+            "analyses": analyses,
+            "deliveries": deliveries,
+            "runs": runs,
+        }
 
     def latest_notices(self, limit: int) -> list[Notice]:
         rows = self.connection.execute(

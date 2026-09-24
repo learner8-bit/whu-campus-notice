@@ -45,6 +45,7 @@ class AIAnalysisTests(unittest.TestCase):
         assert config is not None
         self.assertEqual(config.provider, "deepseek")
         self.assertEqual(config.model, "deepseek-flash")
+        self.assertEqual(config.timeout_seconds, 120)
         self.assertIn("2025级", config.user_profile)
         self.assertIn("电子信息", config.user_profile)
 

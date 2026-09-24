@@ -59,12 +59,23 @@ def main() -> int:
         help="Without scanning, preview this many recent useful stored notices",
     )
     parser.add_argument(
+        "--skip-if-complete", action="store_true",
+        help="Skip collection when every requested channel already succeeded for this day",
+    )
+    parser.add_argument(
+        "--retention-days", type=int, default=90,
+        help="Keep notice, analysis, run and delivery history for this many days",
+    )
+    parser.add_argument(
         "--database", type=Path, default=ROOT / "data" / "state" / "notices.sqlite3"
     )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "data" / "runs")
     args = parser.parse_args()
-    if args.days < 1 or args.preview_latest < 0:
-        parser.error("--days must be positive and --preview-latest cannot be negative")
+    if args.days < 1 or args.preview_latest < 0 or args.retention_days < 1:
+        parser.error(
+            "--days and --retention-days must be positive; "
+            "--preview-latest cannot be negative"
+        )
     if args.send and args.preview_latest:
         parser.error("--preview-latest cannot be sent; it contains historical notices")
     if args.force_send and not args.send:
@@ -88,6 +99,21 @@ def main() -> int:
             parser.error(str(exc))
 
     day = args.digest_day or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+    with NoticeStore(args.database) as store:
+        removed = store.prune_history(args.retention_days)
+        if any(removed.values()):
+            print(
+                "retention cleanup: "
+                + " ".join(f"{key}={value}" for key, value in removed.items())
+            )
+        if args.send and args.skip_if_complete and not args.force_send:
+            requested_channels = (
+                ("feishu", "email") if args.channels == "both" else (args.channels,)
+            )
+            if all(store.delivery_complete(day, channel) for channel in requested_channels):
+                print(f"{day}: requested delivery channels already completed; skipping")
+                return 0
+
     baseline_today = []
     scan_status: dict[str, str] = {}
     health_issues: list[HealthIssue] = []
@@ -161,6 +187,7 @@ def main() -> int:
         assert delivery is not None
         failed = False
         if args.channels in {"feishu", "both"}:
+            feishu_failed = False
             for index, part in enumerate(feishu_parts(digest), 1):
                 digest_hash = content_hash(part)
                 if not args.force_send and store.was_delivered(day, "feishu", digest_hash):
@@ -171,9 +198,13 @@ def main() -> int:
                     store.record_delivery(day, "feishu", digest_hash)
                     print(f"Feishu part {index}: sent")
                 except RuntimeError as exc:
+                    feishu_failed = True
                     failed = True
                     health_issues.append(HealthIssue("delivery", "飞书", str(exc)))
                     print(f"Feishu part {index}: {exc}", file=sys.stderr)
+
+            if not feishu_failed:
+                store.mark_delivery_complete(day, "feishu")
 
             if health_issues:
                 alert = render_health_alert(day, health_issues)
@@ -194,6 +225,7 @@ def main() -> int:
                     print("Feishu health alert: already sent")
 
         if args.channels in {"email", "both"}:
+            email_failed = False
             email_hash = content_hash(digest.title + "\n" + plain)
             if not args.force_send and store.was_delivered(day, "email", email_hash):
                 print("Email: already sent")
@@ -203,8 +235,11 @@ def main() -> int:
                     store.record_delivery(day, "email", email_hash)
                     print("Email: sent")
                 except RuntimeError as exc:
+                    email_failed = True
                     failed = True
                     print(f"Email: {exc}", file=sys.stderr)
+            if not email_failed:
+                store.mark_delivery_complete(day, "email")
         return 1 if failed or any(value != "ok" for value in scan_status.values()) else 0
 
 
