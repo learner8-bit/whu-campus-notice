@@ -195,7 +195,8 @@ def main() -> int:
                     continue
                 try:
                     send_feishu(delivery, part)
-                    store.record_delivery(day, "feishu", digest_hash)
+                    if not args.force_send:
+                        store.record_delivery(day, "feishu", digest_hash)
                     print(f"Feishu part {index}: sent")
                 except RuntimeError as exc:
                     feishu_failed = True
@@ -203,7 +204,7 @@ def main() -> int:
                     health_issues.append(HealthIssue("delivery", "飞书", str(exc)))
                     print(f"Feishu part {index}: {exc}", file=sys.stderr)
 
-            if not feishu_failed:
+            if not feishu_failed and not args.force_send:
                 store.mark_delivery_complete(day, "feishu")
 
             if health_issues:
@@ -212,7 +213,8 @@ def main() -> int:
                 if args.force_send or not store.was_delivered(day, "feishu-health", alert_hash):
                     try:
                         send_feishu(delivery, alert)
-                        store.record_delivery(day, "feishu-health", alert_hash)
+                        if not args.force_send:
+                            store.record_delivery(day, "feishu-health", alert_hash)
                         print("Feishu health alert: sent")
                         github_env = os.getenv("GITHUB_ENV", "")
                         if github_env:
@@ -232,13 +234,14 @@ def main() -> int:
             else:
                 try:
                     send_email(delivery, digest.title, plain, html_body)
-                    store.record_delivery(day, "email", email_hash)
+                    if not args.force_send:
+                        store.record_delivery(day, "email", email_hash)
                     print("Email: sent")
                 except RuntimeError as exc:
                     email_failed = True
                     failed = True
                     print(f"Email: {exc}", file=sys.stderr)
-            if not email_failed:
+            if not email_failed and not args.force_send:
                 store.mark_delivery_complete(day, "email")
         return 1 if failed or any(value != "ok" for value in scan_status.values()) else 0
 
