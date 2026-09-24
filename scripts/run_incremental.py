@@ -15,7 +15,7 @@ from whu_notice_research.sites import SUPPORTED_SITES  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description="Incrementally collect and deduplicate notices")
     parser.add_argument("--site", choices=sorted(SUPPORTED_SITES), required=True)
-    parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--days", type=int, default=3)
     parser.add_argument(
         "--database",
         type=Path,

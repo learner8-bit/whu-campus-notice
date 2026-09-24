@@ -49,7 +49,7 @@ def main() -> int:
         "--channels", choices=("feishu", "email", "both"), default="feishu",
         help="Delivery channels; defaults to Feishu only",
     )
-    parser.add_argument("--days", type=int, default=30, help="Lookback window for daily scans")
+    parser.add_argument("--days", type=int, default=3, help="Lookback window for daily scans")
     parser.add_argument(
         "--digest-day",
         help="Build the digest for this YYYY-MM-DD date instead of today",
