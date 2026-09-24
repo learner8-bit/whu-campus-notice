@@ -26,10 +26,17 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 Write-Step "Checking GitHub login"
 & gh auth status --hostname github.com
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Complete GitHub login in the browser, then run this file again." -ForegroundColor Yellow
+    Write-Host "First use only: GitHub authorization is required to start Actions." -ForegroundColor Yellow
+    Write-Host "1. Press Enter when prompted; GitHub will open in your browser."
+    Write-Host "2. Paste the one-time code already copied to your clipboard."
+    Write-Host "3. Approve access, then return here. This script will continue automatically."
     & gh auth login --hostname github.com --web --git-protocol https
     if ($LASTEXITCODE -ne 0) {
         Stop-WithMessage "GitHub login was not completed."
+    }
+    & gh auth status --hostname github.com
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithMessage "GitHub authorization finished, but the login was not saved."
     }
 }
 
