@@ -188,7 +188,10 @@ class EnrichmentTests(unittest.TestCase):
         )
         message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
         self.assertTrue(message.startswith("学校信息日报｜2026-09-23"))
-        self.assertIn("【竞赛｜武汉大学本科生院】关于竞赛报名的通知", message)
+        self.assertIn(
+            "🏆【竞赛】\n来源：武汉大学本科生院\n\n关于竞赛报名的通知",
+            message,
+        )
         self.assertIn("报名截止：9月30日", message)
         self.assertIn("材料：\n- 报名表", message)
         self.assertIn(
@@ -202,6 +205,74 @@ class EnrichmentTests(unittest.TestCase):
         self.assertNotIn("https://contest.example.org/", message)
         self.assertNotIn("可信度", message)
         self.assertNotIn("报名入口", message)
+
+    def test_category_order_aliases_and_exclusions(self) -> None:
+        def categorized(title: str, category: str) -> Notice:
+            notice = Notice(
+                source_id="test",
+                source_name="通知公告",
+                published_at="2026-09-23",
+                title=title,
+                url=f"https://example.org/{category}",
+                site_id="test",
+                site_name="测试来源",
+            )
+            notice.ai_analysis = {
+                "schema_version": "ai_v3",
+                "actionable": True,
+                "audience_match": True,
+                "needs_review": False,
+                "category": category,
+            }
+            return notice
+
+        notices = [
+            categorized("交流项目", "国际交流"),
+            categorized("大学生创新创业项目", "创新创业"),
+            categorized("奖学金评选", "奖学金"),
+            categorized("心理健康讲座", "学术讲座"),
+            categorized("本科生选课通知", "本科生事务"),
+            categorized("志愿服务招募", "志愿服务"),
+            categorized("学术报告", "学术讲座"),
+            categorized("助学金申请", "本科生事务"),
+        ]
+        digest = build_digest("2026-09-23", notices, {})
+        message = "\n".join(feishu_parts(digest))
+        self.assertNotIn("心理健康讲座", message)
+        self.assertNotIn("助学金申请", message)
+        self.assertNotIn("创新创业】", message)
+        self.assertNotIn("奖学金】", message)
+        self.assertLess(message.index("🏅【评奖评优】"), message.index("🔬【科研】"))
+        self.assertLess(message.index("🔬【科研】"), message.index("📚【本科事务】"))
+        self.assertLess(message.index("📚【本科事务】"), message.index("🎤【讲座】"))
+        self.assertLess(message.index("🎤【讲座】"), message.index("🤝【志愿活动】"))
+        self.assertLess(message.index("🤝【志愿活动】"), message.index("🌍【国际交流】"))
+
+    def test_deadline_labels_are_concise(self) -> None:
+        notice = Notice(
+            source_id="test",
+            source_name="通知公告",
+            published_at="2026-09-23",
+            title="奖学金评选通知",
+            url="https://example.org/award",
+            site_id="test",
+            site_name="测试来源",
+            ai_analysis={
+                "schema_version": "ai_v3",
+                "actionable": True,
+                "audience_match": True,
+                "needs_review": False,
+                "category": "评奖评优",
+                "deadlines": [
+                    {"label": "校内个人申请填报截止", "time": "10月1日"},
+                    {"label": "先进班集体材料提交截止", "time": "10月2日"},
+                ],
+            },
+        )
+        message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
+        self.assertIn("申请截止：10月1日", message)
+        self.assertIn("材料截止：10月2日", message)
+        self.assertNotIn("校内个人申请填报截止", message)
 
     def test_ai_empty_summary_does_not_fall_back_to_repeated_body_text(self) -> None:
         notice = Notice(

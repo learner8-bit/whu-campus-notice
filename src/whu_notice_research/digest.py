@@ -8,6 +8,12 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
+from .categories import (
+    CATEGORY_ICONS,
+    canonical_category,
+    category_rank,
+    is_excluded_topic,
+)
 from .delivery_policy import delivery_label
 from .models import Notice
 
@@ -34,9 +40,14 @@ def _title_key(value: str) -> str:
 
 
 def _effective_label(notice: Notice) -> str:
+    if is_excluded_topic(notice.title) or not _category(notice):
+        return "filter"
     ai = notice.ai_analysis
     if ai.get("schema_version"):
-        if ai.get("audience_match") is False or ai.get("actionable") is False:
+        if (
+            ai.get("audience_match") is False
+            or ai.get("actionable") is False
+        ):
             return "filter"
         if ai.get("needs_review") is True:
             return "review"
@@ -55,22 +66,7 @@ def _dedupe_key(notice: Notice) -> str:
 
 
 def _category(notice: Notice) -> str:
-    category = str(notice.ai_analysis.get("category") or "")
-    if category and category != "其他":
-        return category
-    title = notice.title
-    for name, words in (
-        ("竞赛", ("竞赛", "比赛", "大赛")),
-        ("奖学金", ("奖学金", "助学金")),
-        ("国际交流", ("交流", "交换", "访学")),
-        ("科研机会", ("科研", "实验室", "招募")),
-        ("学术讲座", ("讲座", "论坛", "报告")),
-        ("志愿服务", ("志愿", "志愿者")),
-        ("社会实践", ("实践",)),
-    ):
-        if any(word in title for word in words):
-            return name
-    return "通知"
+    return canonical_category(notice.ai_analysis.get("category"), notice.title)
 
 
 def _material_names(notice: Notice) -> list[str]:
@@ -110,7 +106,46 @@ def _deadline_rows(notice: Notice) -> list[tuple[str, str]]:
         legacy = str(notice.ai_analysis.get("deadline") or "").strip()
         if legacy:
             rows.append(("截止时间", legacy))
-    return rows[:8]
+    return _concise_deadlines(rows[:8])
+
+
+def _deadline_action(label: str) -> str:
+    if "材料" in label:
+        return "材料截止"
+    if "作品" in label or "成果" in label:
+        return "作品截止"
+    if "征集" in label:
+        return "征集截止"
+    if "报名" in label:
+        return "报名截止"
+    if "申请" in label or "填报" in label or "审核" in label:
+        return "申请截止"
+    return "截止"
+
+
+def _deadline_subject(label: str) -> str:
+    subject = re.sub(r"(?:校内|个人|线上|系统|正式|最终|申请人)", "", label)
+    subject = re.sub(
+        r"(?:申请填报|申请|报名|材料提交|材料报送|材料|作品提交|成果提交|征集|提交|审核)?截止(?:时间)?$",
+        "",
+        subject,
+    )
+    return subject.strip(" ：:，,、-—（）()")
+
+
+def _concise_deadlines(rows: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    actions = [_deadline_action(label) for label, _ in rows]
+    result: list[tuple[str, str]] = []
+    for (raw_label, time_text), action in zip(rows, actions):
+        if actions.count(action) == 1:
+            label = action
+        else:
+            subject = _deadline_subject(raw_label)
+            label = f"{subject}{action}" if subject else action
+        row = (label, time_text)
+        if row not in result:
+            result.append(row)
+    return result
 
 
 def _has_detail_content(notice: Notice) -> bool:
@@ -128,9 +163,10 @@ def _original_label(notice: Notice) -> str:
     return "原文"
 
 
-def _compact_lines(notice: Notice, marker: str = "") -> list[str]:
-    prefix = f"{marker} " if marker else ""
-    lines = [f"{prefix}【{_category(notice)}｜{notice.site_name}】{notice.title}"]
+def _compact_lines(notice: Notice) -> list[str]:
+    category = _category(notice)
+    icon = CATEGORY_ICONS.get(category, "📌")
+    lines = [f"{icon}【{category}】", f"来源：{notice.site_name}", "", notice.title]
     value = str(notice.ai_analysis.get("value") or "").strip()
     materials = _material_names(notice)
     attachments = _attachment_rows(notice)
@@ -186,6 +222,17 @@ def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -
     return digest
 
 
+def _display_notices(digest: DailyDigest) -> list[Notice]:
+    return sorted(
+        [*digest.keep, *digest.review],
+        key=lambda item: (
+            category_rank(_category(item)),
+            item.published_at,
+            item.title,
+        ),
+    )
+
+
 def _excerpt(notice: Notice, limit: int = 160) -> str:
     text = re.sub(r"\s+", " ", notice.summary or notice.body_text).strip()
     if not text and notice.fetch_error:
@@ -200,9 +247,9 @@ def render_text(digest: DailyDigest) -> str:
         lines.append("采集失败：" + "、".join(failures))
     if not digest.candidate_count:
         lines.append("今日暂无新增的有效候选信息。")
-    for notice in [*digest.keep, *digest.review]:
+    for notice in _display_notices(digest):
         lines.append("")
-        lines.extend(_compact_lines(notice, "✅"))
+        lines.extend(_compact_lines(notice))
     lines.extend(("", "请以官网原文为准。"))
     return "\n".join(lines)
 
@@ -218,7 +265,7 @@ def render_html(digest: DailyDigest) -> str:
         out.append('<p style="color:#a35b00">采集失败：' + html.escape("、".join(failures)) + "</p>")
     if not digest.candidate_count:
         out.append("<p>今日暂无新增的有效候选信息。</p>")
-    for notice in [*digest.keep, *digest.review]:
+    for notice in _display_notices(digest):
         compact = _compact_lines(notice)
         out.append('<section style="padding:14px 0;border-top:1px solid #ddd">')
         out.append(f'<h3 style="margin:0 0 4px">{html.escape(compact[0])}</h3>')
@@ -240,8 +287,8 @@ def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
     if failures:
         header += "\n⚠ 采集失败：" + "、".join(failures)
     entries: list[str] = []
-    for notice in [*digest.keep, *digest.review]:
-        entries.append("\n".join(_compact_lines(notice, "✅")))
+    for notice in _display_notices(digest):
+        entries.append("\n".join(_compact_lines(notice)))
     if not entries:
         entries.append("今日暂无新增的有效候选信息。")
     parts: list[str] = []
