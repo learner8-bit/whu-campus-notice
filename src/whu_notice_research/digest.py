@@ -6,6 +6,7 @@ import hashlib
 import html
 import re
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from .delivery_policy import delivery_label
 from .models import Notice
@@ -21,7 +22,7 @@ class DailyDigest:
 
     @property
     def title(self) -> str:
-        return f"武汉大学校园通知日报｜{self.day}"
+        return f"学校信息日报｜{self.day}"
 
     @property
     def candidate_count(self) -> int:
@@ -78,27 +79,79 @@ def _material_names(notice: Notice) -> list[str]:
         text = str(value).strip()
         if text and text not in names:
             names.append(text)
+    return names[:10]
+
+
+def _attachment_rows(notice: Notice) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
     for item in notice.attachments:
-        text = str(item.get("text") or "").strip()
-        if text and text not in names:
-            names.append(text)
-    return names[:6]
+        name = str(item.get("text") or "附件").strip()
+        url = str(item.get("url") or "").strip()
+        key = (name, url)
+        if key not in seen:
+            seen.add(key)
+            rows.append(key)
+    return rows[:10]
+
+
+def _deadline_rows(notice: Notice) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    values = notice.ai_analysis.get("deadlines", [])
+    if isinstance(values, list):
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            label = str(value.get("label") or "").strip().rstrip("：:")
+            time_text = str(value.get("time") or "").strip()
+            if label and time_text and (label, time_text) not in rows:
+                rows.append((label, time_text))
+    if not rows:
+        legacy = str(notice.ai_analysis.get("deadline") or "").strip()
+        if legacy:
+            rows.append(("截止时间", legacy))
+    return rows[:8]
+
+
+def _has_detail_content(notice: Notice) -> bool:
+    if notice.body_text.strip() or notice.summary.strip():
+        return True
+    return any(
+        str(item.get("highlights") or "").strip()
+        for item in [*notice.attachments, *notice.links]
+    )
+
+
+def _original_label(notice: Notice) -> str:
+    if urlparse(notice.url).hostname == "future.whu.edu.cn":
+        return "原文（需校园网或武大 VPN）"
+    return "原文"
 
 
 def _compact_lines(notice: Notice, marker: str = "") -> list[str]:
     prefix = f"{marker} " if marker else ""
-    lines = [f"{prefix}【{_category(notice)}】{notice.title}"]
-    deadline = str(notice.ai_analysis.get("deadline") or "").strip()
+    lines = [f"{prefix}【{_category(notice)}｜{notice.site_name}】{notice.title}"]
     value = str(notice.ai_analysis.get("value") or "").strip()
     materials = _material_names(notice)
-    if deadline:
-        lines.append(f"截止：{deadline}")
+    attachments = _attachment_rows(notice)
+    for label, time_text in _deadline_rows(notice):
+        lines.append(f"{label}：{time_text}")
     if value:
         lines.append(f"价值：{value}")
     if materials:
-        lines.append("材料/附件：" + "、".join(materials))
-    lines.append(f"原文：{notice.url}")
-    summary = str(notice.ai_analysis.get("summary") or "").strip() or _excerpt(notice, 100)
+        lines.append("材料：")
+        lines.extend(f"- {name}" for name in materials)
+    if attachments:
+        lines.append("附件：")
+        for name, url in attachments:
+            lines.append(f"- {name}" + (f"：{url}" if url else ""))
+    lines.append(f"{_original_label(notice)}：{notice.url}")
+    if not _has_detail_content(notice):
+        lines.append("正文状态：暂未抓取到正文，请连接校园网或武大 VPN 后查看原文。")
+    if notice.ai_analysis.get("schema_version"):
+        summary = str(notice.ai_analysis.get("summary") or "").strip()
+    else:
+        summary = _excerpt(notice, 100)
     if summary:
         lines.append(f"摘要：{summary}")
     return lines
@@ -141,19 +194,15 @@ def _excerpt(notice: Notice, limit: int = 160) -> str:
 
 
 def render_text(digest: DailyDigest) -> str:
-    lines = [
-        digest.title,
-        f"值得关注 {len(digest.keep)}｜待复核 {len(digest.review)}",
-    ]
+    lines = [digest.title]
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
         lines.append("采集失败：" + "、".join(failures))
     if not digest.candidate_count:
         lines.append("今日暂无新增的有效候选信息。")
-    for marker, rows in (("✅", digest.keep), ("🔎", digest.review)):
-        for notice in rows:
-            lines.append("")
-            lines.extend(_compact_lines(notice, marker))
+    for notice in [*digest.keep, *digest.review]:
+        lines.append("")
+        lines.extend(_compact_lines(notice, "✅"))
     lines.extend(("", "请以官网原文为准。"))
     return "\n".join(lines)
 
@@ -163,42 +212,36 @@ def render_html(digest: DailyDigest) -> str:
         '<!doctype html><html lang="zh-CN"><meta charset="utf-8">',
         '<body style="font:15px/1.65 Arial,sans-serif;max-width:760px;margin:28px auto;color:#222">',
         f'<h1 style="font-size:24px">{html.escape(digest.title)}</h1>',
-        f'<p>值得关注 {len(digest.keep)} 条 · 待复核 {len(digest.review)} 条</p>',
     ]
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
         out.append('<p style="color:#a35b00">采集失败：' + html.escape("、".join(failures)) + "</p>")
     if not digest.candidate_count:
         out.append("<p>今日暂无新增的有效候选信息。</p>")
-    for heading, rows in (("值得关注", digest.keep), ("待复核", digest.review)):
-        if not rows:
-            continue
-        out.append(f"<h2>{heading}</h2>")
-        for notice in rows:
-            compact = _compact_lines(notice)
-            out.append('<section style="padding:14px 0;border-top:1px solid #ddd">')
-            out.append(f'<h3 style="margin:0 0 4px">{html.escape(compact[0])}</h3>')
-            for line in compact[1:]:
-                if line.startswith("原文："):
-                    url = html.escape(notice.url, quote=True)
-                    out.append(f'<p><a href="{url}">原文</a></p>')
-                else:
-                    out.append(f"<p>{html.escape(line)}</p>")
-            out.append("</section>")
+    for notice in [*digest.keep, *digest.review]:
+        compact = _compact_lines(notice)
+        out.append('<section style="padding:14px 0;border-top:1px solid #ddd">')
+        out.append(f'<h3 style="margin:0 0 4px">{html.escape(compact[0])}</h3>')
+        for line in compact[1:]:
+            if line.startswith("原文"):
+                url = html.escape(notice.url, quote=True)
+                out.append(f'<p><a href="{url}">{html.escape(_original_label(notice))}</a></p>')
+            else:
+                out.append(f"<p>{html.escape(line)}</p>")
+        out.append("</section>")
     out.append('<p style="color:#666">请以官网原文为准。</p></body></html>')
     return "".join(out)
 
 
 def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
     """Keep webhook text messages comfortably below typical bot size limits."""
-    header = digest.title + f"\n值得关注 {len(digest.keep)}｜待复核 {len(digest.review)}"
+    header = digest.title
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
         header += "\n⚠ 采集失败：" + "、".join(failures)
     entries: list[str] = []
-    for marker, rows in (("✅", digest.keep), ("🔎", digest.review)):
-        for notice in rows:
-            entries.append("\n".join(_compact_lines(notice, marker)))
+    for notice in [*digest.keep, *digest.review]:
+        entries.append("\n".join(_compact_lines(notice, "✅")))
     if not entries:
         entries.append("今日暂无新增的有效候选信息。")
     parts: list[str] = []

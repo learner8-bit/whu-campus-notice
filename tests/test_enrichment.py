@@ -173,12 +173,12 @@ class EnrichmentTests(unittest.TestCase):
                 "status": "parsed",
             }],
             ai_analysis={
-                "schema_version": "ai_v1",
+                "schema_version": "ai_v2",
                 "actionable": True,
                 "audience_match": True,
                 "needs_review": False,
                 "category": "竞赛",
-                "deadline": "9月30日",
+                "deadlines": [{"label": "报名截止", "time": "9月30日"}],
                 "value": "综测竞赛板块可能计分",
                 "materials": ["报名表"],
                 "summary": "完成报名后按要求参赛。",
@@ -187,15 +187,50 @@ class EnrichmentTests(unittest.TestCase):
             },
         )
         message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
-        self.assertIn("【竞赛】关于竞赛报名的通知", message)
-        self.assertIn("截止：9月30日", message)
-        self.assertIn("材料/附件：报名表、报名表.docx", message)
+        self.assertTrue(message.startswith("学校信息日报｜2026-09-23"))
+        self.assertIn("【竞赛｜武汉大学本科生院】关于竞赛报名的通知", message)
+        self.assertIn("报名截止：9月30日", message)
+        self.assertIn("材料：\n- 报名表", message)
+        self.assertIn(
+            "附件：\n- 报名表.docx：https://uc.whu.edu.cn/download/1",
+            message,
+        )
         self.assertIn("原文：https://uc.whu.edu.cn/info/1.htm", message)
         self.assertTrue(message.endswith("摘要：完成报名后按要求参赛。"))
-        self.assertNotIn("https://uc.whu.edu.cn/download/1", message)
+        self.assertNotIn("值得关注", message)
+        self.assertNotIn("待复核", message)
         self.assertNotIn("https://contest.example.org/", message)
         self.assertNotIn("可信度", message)
         self.assertNotIn("报名入口", message)
+
+    def test_ai_empty_summary_does_not_fall_back_to_repeated_body_text(self) -> None:
+        notice = Notice(
+            source_id="future_notice",
+            source_name="通知公告",
+            published_at="2026-09-23",
+            title="关于征集比赛项目的通知",
+            url=(
+                "https://future.whu.edu.cn/content.jsp?"
+                "urltype=news.NewsContentUrl&wbtreeid=1007&wbnewsid=1"
+            ),
+            site_id="youth_league",
+            site_name="共青团武汉大学委员会（未来网）",
+            ai_analysis={
+                "schema_version": "ai_v2",
+                "actionable": True,
+                "audience_match": True,
+                "needs_review": True,
+                "category": "竞赛",
+                "deadlines": [],
+                "materials": [],
+                "summary": "",
+                "event_key": "2026测试竞赛",
+            },
+        )
+        message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
+        self.assertNotIn("摘要：", message)
+        self.assertIn("正文状态：暂未抓取到正文", message)
+        self.assertIn("原文（需校园网或武大 VPN）", message)
 
 
 if __name__ == "__main__":

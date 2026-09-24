@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .storage import NoticeStore
 
 
-PROMPT_VERSION = "ai_v1"
+PROMPT_VERSION = "ai_v2"
 MAX_INPUT_CHARS = 28_000
 ALLOWED_CATEGORIES = {
     "竞赛",
@@ -166,15 +166,20 @@ def _system_prompt(user_profile: str, policy_context: str) -> str:
 若用户资料没有提供具体年级或专业，不要自行假设。
 
 category 只能是：{categories}。
-deadline 只填原文明确出现的报名/申请截止时间，不要把发布日期、活动时间当截止时间。
-materials 只列材料或附件名称，不放 URL。
+deadlines 只填原文明确出现的报名、申请、材料提交、作品提交或征集截止时间，不要把
+发布日期、活动举行时间当截止时间。每项必须拆成 label 和 time；label 要说清楚动作，
+例如“报名截止”“材料提交截止”“巴黎政治学院申请截止”，不能只写“截止”。
+materials 只列申请者需要准备或提交的材料，不要混入网页提供下载的附件文件名，不放 URL。
 event_key 用“年份+正式活动/项目名称+批次”生成稳定短语，用于合并不同官网的同一事项。
 value 只写原文明示的价值，或下方已核验政策能严格推出的综测/保研/奖励分值。
 没有明确依据时 value 必须为空，不得凭常识猜测。若依据仅适用于2026届推免，而目标
 用户为2025级，必须写成“按2026届政策参考……，本届规则待发布”，不能当作确定分值。
 只要 value 非空，policy_basis 必须填写“通知原文”，或从政策条目括号里的“依据”
 逐字复制完整文件名和页码；不能提供依据就把 value 留空。不要自行缩写政策依据。
-summary 使用一句简短中文，补充前面字段未覆盖的行动信息。
+summary 使用一句简短中文，只补充 title、deadlines、materials、value 未覆盖的行动信息；
+不得重复截止时间、材料、适用对象或标题已经说明的内容。没有新的补充信息就返回空字符串。
+若输入里只有标题而没有正文、摘要、附件内容或外部页面内容，summary 必须为空且
+needs_review=true，不得根据标题补写正文没有提供的事实。
 
 已核验政策：
 {policy_context}
@@ -185,7 +190,9 @@ summary 使用一句简短中文，补充前面字段未覆盖的行动信息。
   "audience_match": true,
   "needs_review": false,
   "category": "竞赛",
-  "deadline": "",
+  "deadlines": [
+    {{"label": "报名截止", "time": "2026-10-01 12:00"}}
+  ],
   "value": "",
   "materials": [],
   "summary": "",
@@ -226,13 +233,29 @@ def normalize_analysis(raw: dict) -> dict:
         text = _short_text(value, 80)
         if text and text not in materials:
             materials.append(text)
+    deadlines: list[dict[str, str]] = []
+    raw_deadlines = raw.get("deadlines", [])
+    if isinstance(raw_deadlines, list):
+        for value in raw_deadlines:
+            if not isinstance(value, dict):
+                continue
+            label = _short_text(value.get("label"), 50).rstrip("：:")
+            time_text = _short_text(value.get("time"), 100)
+            if label and time_text:
+                item = {"label": label, "time": time_text}
+                if item not in deadlines:
+                    deadlines.append(item)
+    legacy_deadline = _short_text(raw.get("deadline"), 100)
+    if legacy_deadline and not deadlines:
+        deadlines.append({"label": "截止时间", "time": legacy_deadline})
     return {
         "schema_version": PROMPT_VERSION,
         "actionable": raw.get("actionable") is True,
         "audience_match": raw.get("audience_match") is not False,
         "needs_review": raw.get("needs_review") is True,
         "category": category,
-        "deadline": _short_text(raw.get("deadline"), 80),
+        "deadlines": deadlines[:8],
+        "deadline": deadlines[0]["time"] if len(deadlines) == 1 else "",
         "value": value_text,
         "materials": materials[:10],
         "summary": _short_text(raw.get("summary"), 180),

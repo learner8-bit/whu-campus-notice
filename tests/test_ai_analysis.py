@@ -76,7 +76,7 @@ class AIAnalysisTests(unittest.TestCase):
     def test_ai_filters_audience_mismatch(self) -> None:
         notice = sample_notice("仅限2024级学生申请")
         notice.ai_analysis = {
-            "schema_version": "ai_v1",
+            "schema_version": "ai_v2",
             "actionable": True,
             "audience_match": False,
             "needs_review": False,
@@ -253,7 +253,7 @@ class AIAnalysisTests(unittest.TestCase):
             "audience_match": True,
             "needs_review": False,
             "category": "竞赛",
-            "deadline": "9月30日",
+            "deadlines": [{"label": "报名截止", "time": "9月30日"}],
             "value": "",
             "materials": [],
             "summary": "报名正在进行。",
@@ -264,6 +264,8 @@ class AIAnalysisTests(unittest.TestCase):
         self.assertNotIn("可信度", message)
         self.assertNotIn("报名入口", message)
         self.assertNotIn("对象：", message)
+        self.assertNotIn("值得关注", message)
+        self.assertNotIn("待复核", message)
         self.assertEqual(message.count(notice.url), 1)
 
 
