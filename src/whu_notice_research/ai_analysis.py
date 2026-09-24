@@ -254,8 +254,8 @@ def analyze_notice(
     payload = {
         "model": config.model,
         "temperature": 0,
-        "max_tokens": 1200,
-        "reasoning_effort": "low",
+        "max_tokens": 2000,
+        "thinking": {"type": "disabled"},
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -265,18 +265,30 @@ def analyze_notice(
             {"role": "user", "content": _notice_input(notice)},
         ],
     }
-    request = Request(
-        _completion_url(config.base_url),
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {config.api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "whu-campus-notice/ai-v1",
-        },
-        method="POST",
-    )
     last_error: Exception | None = None
-    for attempt in range(2):
+    for attempt in range(3):
+        attempt_payload = dict(payload)
+        if attempt:
+            attempt_payload["messages"] = [
+                *payload["messages"],
+                {
+                    "role": "user",
+                    "content": (
+                        "请重新输出。上一尝试为空或不是合法 JSON。"
+                        "只输出一个完整 JSON 对象，不要解释，不要使用 Markdown。"
+                    ),
+                },
+            ]
+        request = Request(
+            _completion_url(config.base_url),
+            data=json.dumps(attempt_payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config.api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "whu-campus-notice/ai-v1",
+            },
+            method="POST",
+        )
         try:
             with urlopen(request, timeout=config.timeout_seconds) as response:
                 result = json.loads(response.read().decode("utf-8"))
@@ -291,8 +303,8 @@ def analyze_notice(
             return analysis
         except (HTTPError, URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError) as exc:
             last_error = exc
-            if attempt == 0:
-                time.sleep(1)
+            if attempt < 2:
+                time.sleep(1 + attempt * 2)
     if isinstance(last_error, HTTPError):
         detail = f"HTTP {last_error.code}"
         try:

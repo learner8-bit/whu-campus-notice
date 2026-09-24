@@ -43,6 +43,7 @@ jobs:
       - name: Install document parser
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - name: Collect and send daily digest
+        continue-on-error: ${{ inputs.diagnostic_only == true }}
         env:
           AI_PROVIDER: deepseek
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
@@ -64,7 +65,7 @@ jobs:
           fi
           python scripts/daily_digest.py $EXTRA_ARGS
       - name: Notify unexpected workflow failure
-        if: ${{ failure() && env.HEALTH_ALERT_SENT != 'true' }}
+        if: ${{ failure() && env.HEALTH_ALERT_SENT != 'true' && inputs.diagnostic_only != true }}
         continue-on-error: true
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}

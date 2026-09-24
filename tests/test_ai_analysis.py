@@ -174,7 +174,8 @@ class AIAnalysisTests(unittest.TestCase):
         payload = json.loads(request.data.decode("utf-8"))
         self.assertEqual(request.full_url, "https://api.deepseek.com/chat/completions")
         self.assertEqual(payload["response_format"], {"type": "json_object"})
-        self.assertEqual(payload["reasoning_effort"], "low")
+        self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertEqual(payload["max_tokens"], 2000)
         self.assertEqual(result["deadline"], "9月30日")
         self.assertEqual(result["value"], "")
 
@@ -183,7 +184,8 @@ class AIAnalysisTests(unittest.TestCase):
     def test_http_error_reason_is_safe_and_actionable(self, urlopen_mock, _sleep_mock) -> None:
         body = json.dumps({"error": {"message": "Rate limit reached"}}).encode("utf-8")
         urlopen_mock.side_effect = [
-            HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, BytesIO(body)),
+            HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, None),
+            HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, None),
             HTTPError("https://api.deepseek.com/chat/completions", 429, "Too Many Requests", None, BytesIO(body)),
         ]
         config = AIConfig(
@@ -195,6 +197,53 @@ class AIAnalysisTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "HTTP 429: Rate limit reached"):
             analyze_notice(sample_notice(), config, policy_context="none")
+
+    @patch("whu_notice_research.ai_analysis.time.sleep")
+    @patch("whu_notice_research.ai_analysis.urlopen")
+    def test_empty_json_content_is_retried_with_stronger_prompt(
+        self, urlopen_mock, _sleep_mock
+    ) -> None:
+        class Response:
+            def __init__(self, content: str):
+                self.content = content
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({
+                    "choices": [{"message": {"content": self.content}}],
+                }, ensure_ascii=False).encode("utf-8")
+
+        valid = json.dumps({
+            "actionable": True,
+            "audience_match": True,
+            "needs_review": False,
+            "category": "竞赛",
+            "deadline": "",
+            "value": "",
+            "materials": [],
+            "summary": "报名正在进行。",
+            "event_key": "2026电子设计竞赛",
+            "policy_basis": "",
+        }, ensure_ascii=False)
+        urlopen_mock.side_effect = [Response(""), Response(valid)]
+        config = AIConfig(
+            api_key="secret",
+            provider="deepseek",
+            base_url="https://api.deepseek.com",
+            model="deepseek-flash",
+            user_profile="test",
+        )
+        result = analyze_notice(sample_notice(), config, policy_context="none")
+        self.assertTrue(result["actionable"])
+        self.assertEqual(urlopen_mock.call_count, 2)
+        retry_request = urlopen_mock.call_args_list[1].args[0]
+        retry_payload = json.loads(retry_request.data.decode("utf-8"))
+        self.assertIn("上一尝试为空", retry_payload["messages"][-1]["content"])
 
     def test_compact_message_has_no_confidence_or_signup_link(self) -> None:
         notice = sample_notice()
