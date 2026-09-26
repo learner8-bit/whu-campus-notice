@@ -18,6 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_DATABASE = Path("/tmp/whu-notice/notices.sqlite3")
 LOCAL_OUTPUT = Path("/tmp/whu-notice/runs")
 BASELINE_DATABASE = ROOT / "data" / "state" / "notices.sqlite3"
+BEIJING_TIME = timezone(timedelta(hours=8))
+
+
+def past_daily_send_cutoff(now: datetime | None = None) -> bool:
+    """Return true after the 23:30 Beijing-time delivery cutoff."""
+    local_now = now or datetime.now(BEIJING_TIME)
+    cutoff = local_now.replace(hour=23, minute=30, second=0, microsecond=0)
+    return local_now > cutoff
 
 
 def required_environment(name: str) -> str:
@@ -101,6 +109,10 @@ def run_digest() -> int:
 
 
 def main() -> int:
+    if past_daily_send_cutoff():
+        print("send window: past 23:30 Asia/Shanghai; skipping")
+        return 0
+
     bucket_name = required_environment("STATE_BUCKET")
     state_object = os.getenv("STATE_OBJECT", "state/notices.sqlite3").strip()
     lock_object = os.getenv("LOCK_OBJECT", "locks/daily-digest.lock").strip()
