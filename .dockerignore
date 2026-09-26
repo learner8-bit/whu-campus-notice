@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.secrets
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+data/runs
+data/eis
+data/undergraduate_school
+docs
+tests
+test_today_push.cmd
