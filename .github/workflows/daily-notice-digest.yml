@@ -1,14 +1,6 @@
 name: Wuhan University notice digest
 
 on:
-  schedule:
-    # GitHub cron uses UTC. The first run queues at 20:43 Beijing time,
-    # prepares the runner, then waits locally until 22:00.
-    - cron: '43 12 * * *'
-    # Compensation attempts: 22:11, 22:41 and 23:11 Beijing time.
-    - cron: '11 14 * * *'
-    - cron: '41 14 * * *'
-    - cron: '11 15 * * *'
   workflow_dispatch:
     inputs:
       force_send:
