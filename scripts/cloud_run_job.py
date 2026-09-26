@@ -35,6 +35,10 @@ def required_environment(name: str) -> str:
     return value
 
 
+def environment_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def acquire_lock(bucket: storage.Bucket, object_name: str) -> storage.Blob | None:
     """Acquire a GCS lease so overlapping schedules cannot double-send."""
     lock = bucket.blob(object_name)
@@ -88,6 +92,8 @@ def upload_database(bucket: storage.Bucket, object_name: str) -> None:
 def run_digest() -> int:
     days = os.getenv("LOOKBACK_DAYS", "1").strip() or "1"
     retention_days = os.getenv("RETENTION_DAYS", "90").strip() or "90"
+    digest_day = os.getenv("DIGEST_DAY", "").strip()
+    test_mode = environment_flag("TEST_MODE")
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     command = [
         sys.executable,
@@ -105,11 +111,16 @@ def run_digest() -> int:
         "--output-dir",
         str(LOCAL_OUTPUT),
     ]
+    if test_mode:
+        command.append("--force-send")
+    if digest_day:
+        command.extend(("--digest-day", digest_day))
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 
 def main() -> int:
-    if past_daily_send_cutoff():
+    test_mode = environment_flag("TEST_MODE")
+    if past_daily_send_cutoff() and not test_mode:
         print("send window: past 23:30 Asia/Shanghai; skipping")
         return 0
 
@@ -126,7 +137,10 @@ def main() -> int:
     try:
         download_database(bucket, state_object)
         exit_code = run_digest()
-        upload_database(bucket, state_object)
+        if test_mode:
+            print("test mode: production state was not uploaded")
+        else:
+            upload_database(bucket, state_object)
         return exit_code
     finally:
         try:
