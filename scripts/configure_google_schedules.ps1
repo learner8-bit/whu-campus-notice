@@ -32,26 +32,29 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 foreach ($item in $schedules) {
+    $name = [string]$item.Name
+    $cron = [string]$item.Cron
+    $phase = [string]$item.Phase
     $body = @{
         overrides = @{
             containerOverrides = @(
-                @{ env = @( @{ name = "RUN_PHASE"; value = $item.Phase } ) }
+                @{ env = @( @{ name = "RUN_PHASE"; value = $phase } ) }
             )
         }
     } | ConvertTo-Json -Depth 8 -Compress
 
-    if ($existingJobs -contains $item.Name) {
-        & $gcloud scheduler jobs update http $item.Name `
-            --project=$Project --location=$Region --schedule=$item.Cron `
+    if ($existingJobs -contains $name) {
+        & $gcloud scheduler jobs update http $name `
+            --project=$Project --location=$Region --schedule=$cron `
             --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
             --oauth-service-account-email=$SchedulerServiceAccount `
             --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
-            --headers=Content-Type=application/json --message-body=$body `
+            --update-headers=Content-Type=application/json --message-body=$body `
             --attempt-deadline=180s
     }
     else {
-        & $gcloud scheduler jobs create http $item.Name `
-            --project=$Project --location=$Region --schedule=$item.Cron `
+        & $gcloud scheduler jobs create http $name `
+            --project=$Project --location=$Region --schedule=$cron `
             --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
             --oauth-service-account-email=$SchedulerServiceAccount `
             --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
@@ -59,7 +62,7 @@ foreach ($item in $schedules) {
             --attempt-deadline=180s
     }
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to configure $($item.Name)."
+        throw "Failed to configure $name."
     }
 }
 
