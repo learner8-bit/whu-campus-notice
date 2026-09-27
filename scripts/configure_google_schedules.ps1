@@ -23,6 +23,14 @@ $schedules = @(
     @{ Name = "whu-notice-retry-3"; Cron = "11 23 * * *"; Phase = "send" }
 )
 
+$existingJobs = @(
+    & $gcloud scheduler jobs list --project=$Project --location=$Region `
+        --format="value(name.basename())"
+)
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to list existing Cloud Scheduler jobs."
+}
+
 foreach ($item in $schedules) {
     $body = @{
         overrides = @{
@@ -32,8 +40,7 @@ foreach ($item in $schedules) {
         }
     } | ConvertTo-Json -Depth 8 -Compress
 
-    & $gcloud scheduler jobs describe $item.Name --project=$Project --location=$Region *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if ($existingJobs -contains $item.Name) {
         & $gcloud scheduler jobs update http $item.Name `
             --project=$Project --location=$Region --schedule=$item.Cron `
             --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
