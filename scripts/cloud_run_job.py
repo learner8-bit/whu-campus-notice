@@ -17,6 +17,7 @@ from google.cloud import storage
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_DATABASE = Path("/tmp/whu-notice/notices.sqlite3")
 LOCAL_OUTPUT = Path("/tmp/whu-notice/runs")
+LOCAL_WECHAT_CREDENTIALS = Path("/tmp/whu-notice/private/wechat_credentials.json")
 BASELINE_DATABASE = ROOT / "data" / "state" / "notices.sqlite3"
 BEIJING_TIME = timezone(timedelta(hours=8))
 
@@ -62,15 +63,18 @@ def acquire_lock(bucket: storage.Bucket, object_name: str) -> storage.Blob | Non
         return None
 
 
-def download_database(bucket: storage.Bucket, object_name: str) -> None:
+def download_database(bucket: storage.Bucket, object_name: str) -> int:
     LOCAL_DATABASE.parent.mkdir(parents=True, exist_ok=True)
     blob = bucket.blob(object_name)
     try:
         blob.download_to_filename(LOCAL_DATABASE)
+        blob.reload()
         print(f"state: downloaded gs://{bucket.name}/{object_name}")
+        return int(blob.generation or 0)
     except NotFound:
         shutil.copy2(BASELINE_DATABASE, LOCAL_DATABASE)
         print("state: cloud object absent; copied packaged baseline")
+        return 0
 
 
 def database_is_valid(path: Path) -> bool:
@@ -82,10 +86,12 @@ def database_is_valid(path: Path) -> bool:
         return False
 
 
-def upload_database(bucket: storage.Bucket, object_name: str) -> None:
+def upload_database(bucket: storage.Bucket, object_name: str, generation: int) -> None:
     if not LOCAL_DATABASE.exists() or not database_is_valid(LOCAL_DATABASE):
         raise RuntimeError("refusing to upload a missing or invalid SQLite database")
-    bucket.blob(object_name).upload_from_filename(LOCAL_DATABASE)
+    bucket.blob(object_name).upload_from_filename(
+        LOCAL_DATABASE, if_generation_match=generation
+    )
     print(f"state: uploaded gs://{bucket.name}/{object_name}")
 
 
@@ -94,28 +100,74 @@ def run_digest() -> int:
     retention_days = os.getenv("RETENTION_DAYS", "90").strip() or "90"
     digest_day = os.getenv("DIGEST_DAY", "").strip()
     test_mode = environment_flag("TEST_MODE")
+    os.environ["WECHAT_CREDENTIALS_FILE"] = str(LOCAL_WECHAT_CREDENTIALS)
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
-    command = [
-        sys.executable,
-        str(ROOT / "scripts" / "daily_digest.py"),
-        "--send",
-        "--channels",
-        "feishu",
-        "--days",
-        days,
-        "--retention-days",
-        retention_days,
-        "--skip-if-complete",
-        "--database",
-        str(LOCAL_DATABASE),
-        "--output-dir",
-        str(LOCAL_OUTPUT),
-    ]
-    if test_mode:
+    phase = os.getenv("RUN_PHASE", "send").strip().lower()
+    if phase == "wechat-sync":
+        command = [
+            sys.executable,
+            str(ROOT / "scripts" / "wechat_sync.py"),
+            "--days",
+            days,
+            "--database",
+            str(LOCAL_DATABASE),
+        ]
+    else:
+        command = [
+            sys.executable,
+            str(ROOT / "scripts" / "daily_digest.py"),
+            "--channels",
+            "feishu",
+            "--days",
+            days,
+            "--retention-days",
+            retention_days,
+            "--database",
+            str(LOCAL_DATABASE),
+            "--output-dir",
+            str(LOCAL_OUTPUT),
+        ]
+        if phase == "prepare":
+            pass
+        elif phase == "freeze":
+            command.extend(("--no-scan", "--freeze"))
+        elif phase == "send":
+            command.extend(("--send", "--skip-if-complete", "--no-scan", "--use-freeze"))
+        else:
+            raise RuntimeError(f"unsupported RUN_PHASE: {phase}")
+    if test_mode and phase == "send":
         command.append("--force-send")
     if digest_day:
         command.extend(("--digest-day", digest_day))
     return subprocess.run(command, cwd=ROOT, check=False).returncode
+
+
+def download_optional_private(
+    bucket: storage.Bucket, object_name: str, target: Path
+) -> tuple[int, bytes]:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    blob = bucket.blob(object_name)
+    try:
+        blob.download_to_filename(target)
+        blob.reload()
+        return int(blob.generation or 0), target.read_bytes()
+    except NotFound:
+        return 0, b""
+
+
+def upload_private_if_changed(
+    bucket: storage.Bucket,
+    object_name: str,
+    target: Path,
+    generation: int,
+    original: bytes,
+) -> None:
+    if not target.exists() or target.read_bytes() == original:
+        return
+    bucket.blob(object_name).upload_from_filename(
+        target, if_generation_match=generation
+    )
+    print(f"credentials: updated gs://{bucket.name}/{object_name}")
 
 
 def main() -> int:
@@ -126,6 +178,9 @@ def main() -> int:
 
     bucket_name = required_environment("STATE_BUCKET")
     state_object = os.getenv("STATE_OBJECT", "state/notices.sqlite3").strip()
+    credential_object = os.getenv(
+        "WECHAT_CREDENTIAL_OBJECT", "private/wechat_credentials.json"
+    ).strip()
     lock_object = os.getenv("LOCK_OBJECT", "locks/daily-digest.lock").strip()
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -135,12 +190,22 @@ def main() -> int:
         return 0
 
     try:
-        download_database(bucket, state_object)
+        state_generation = download_database(bucket, state_object)
+        credential_generation, original_credentials = download_optional_private(
+            bucket, credential_object, LOCAL_WECHAT_CREDENTIALS
+        )
         exit_code = run_digest()
         if test_mode:
             print("test mode: production state was not uploaded")
         else:
-            upload_database(bucket, state_object)
+            upload_database(bucket, state_object, state_generation)
+            upload_private_if_changed(
+                bucket,
+                credential_object,
+                LOCAL_WECHAT_CREDENTIALS,
+                credential_generation,
+                original_credentials,
+            )
         return exit_code
     finally:
         try:

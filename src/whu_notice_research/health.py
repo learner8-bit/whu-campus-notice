@@ -64,6 +64,7 @@ def render_health_alert(day: str, issues: list[HealthIssue], *, max_items: int =
         "external_link": "外部链接跟进失败",
         "ai": "DeepSeek 分析异常",
         "delivery": "通知发送异常",
+        "wechat": "公众号覆盖降级",
     }
     lines = [f"⚠️ 武大校园信息系统异常｜{day}"]
     for issue in unique[:max_items]:

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "accounts": [
+    {
+      "id": "whu_official",
+      "display_name": "武汉大学",
+      "verified_by": "https://www.whu.edu.cn/",
+      "rollout_rank": 1,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["whu_main"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "eis_youth",
+      "display_name": "EIS青年说",
+      "verified_by": "https://eis.whu.edu.cn/",
+      "rollout_rank": 2,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["eis"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "undergraduate_school_wechat",
+      "display_name": "武汉大学本科生院",
+      "verified_by": "https://uc.whu.edu.cn/",
+      "rollout_rank": 3,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["undergraduate_school"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "student_affairs_wechat",
+      "display_name": "武汉大学学生工作部",
+      "verified_by": "https://xgb.whu.edu.cn/",
+      "rollout_rank": 7,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["whu_main"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "student_aid_wechat",
+      "display_name": "武汉大学学生资助",
+      "verified_by": "https://zzgl.whu.edu.cn/",
+      "rollout_rank": 5,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["student_aid"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "youth_league_wechat",
+      "display_name": "青春珞珈",
+      "verified_by": "https://future.whu.edu.cn/",
+      "rollout_rank": 4,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["youth_league"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "international_office_wechat",
+      "display_name": "武汉大学国际交流部",
+      "verified_by": "https://oir.whu.edu.cn/",
+      "rollout_rank": 6,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["international_office"],
+      "enabled": false,
+      "verified": false
+    },
+    {
+      "id": "student_union_wechat",
+      "display_name": "武汉大学学生会",
+      "verified_by": "https://future.whu.edu.cn/",
+      "rollout_rank": 8,
+      "providers": ["weread", "message_album", "sogou", "website_mirror"],
+      "related_web_sources": ["youth_league"],
+      "enabled": false,
+      "verified": false
+    }
+  ]
+}

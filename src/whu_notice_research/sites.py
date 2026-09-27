@@ -8,6 +8,7 @@ from .adapters import generic_vsb, undergraduate_school
 from .eis import Source as EisSource
 from .eis import collect_all as collect_eis
 from .models import Notice
+from .source_adapter import AdapterCollectionResult
 
 
 GENERIC_SITES = {
@@ -20,7 +21,25 @@ GENERIC_SITES = {
     "science_technology",
 }
 DISABLED_SITES = {"second_classroom"}
-SUPPORTED_SITES = {"eis", "undergraduate_school", *GENERIC_SITES}
+SUPPORTED_SITES = {"eis", "undergraduate_school", "wechat", *GENERIC_SITES}
+
+
+class WebsiteSourceAdapter:
+    def __init__(self, site_id: str, *, days: int, project_root: Path) -> None:
+        self.site_id = site_id
+        self.days = days
+        self.project_root = project_root
+
+    def collect(self, cursor: dict) -> AdapterCollectionResult:
+        known = {str(item) for item in cursor.get("known_urls", [])}
+        notices = collect_site(
+            self.site_id,
+            days=self.days,
+            project_root=self.project_root,
+            known_urls=known,
+            incremental=bool(cursor.get("incremental")),
+        )
+        return AdapterCollectionResult(notices=notices)
 
 
 def collect_site(
@@ -31,6 +50,8 @@ def collect_site(
     known_urls: set[str] | None = None,
     incremental: bool = False,
 ) -> list[Notice]:
+    if site_id == "wechat":
+        raise ValueError("wechat collection requires persistent cursor state; use run_incremental")
     if site_id == "eis":
         path = project_root / "config" / "eis_sources.json"
         with path.open("r", encoding="utf-8") as handle:

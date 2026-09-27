@@ -39,7 +39,9 @@ def _title_key(value: str) -> str:
     return re.sub(r"[\W_]+", "", value, flags=re.UNICODE).casefold()
 
 
-def _effective_label(notice: Notice) -> str:
+def _effective_label(notice: Notice, day: str = "") -> str:
+    if day and notice.delivery_not_before and day < notice.delivery_not_before:
+        return "filter"
     if is_excluded_topic(notice.title) or not _category(notice):
         return "filter"
     ai = notice.ai_analysis
@@ -63,6 +65,24 @@ def _dedupe_key(notice: Notice) -> str:
         if normalized:
             return "event:" + normalized
     return "title:" + (_title_key(notice.title) or notice.notice_id)
+
+
+def _source_preference(notice: Notice) -> tuple[int, str, int, int]:
+    """Prefer a complete official page, but let a newer update win."""
+    usable = 0 if notice.fetch_error else 1
+    official_with_files = int(notice.channel == "website" and bool(notice.attachments))
+    completeness = len(notice.body_text) + 300 * len(notice.attachments)
+    return (usable, notice.published_at, official_with_files, completeness)
+
+
+def _merge_source_names(preferred: Notice, other: Notice) -> None:
+    names: list[str] = []
+    for value in (preferred.site_name, other.site_name):
+        for name in value.split(" / "):
+            name = name.strip()
+            if name and name not in names:
+                names.append(name)
+    preferred.site_name = " / ".join(names)
 
 
 def _category(notice: Notice) -> str:
@@ -201,18 +221,25 @@ def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -
     priority = {"filter": 0, "review": 1, "keep": 2}
     for notice in notices:
         key = _dedupe_key(notice)
-        rank = priority[_effective_label(notice)]
+        rank = priority[_effective_label(notice, day)]
         current = preferred.get(key)
-        if current is None or (rank, len(notice.body_text)) > (
-            current[0], len(current[1].body_text)
-        ):
+        if current is None:
             preferred[key] = (rank, notice)
+            continue
+        current_notice = current[1]
+        if (rank, _source_preference(notice)) > (
+            current[0], _source_preference(current_notice)
+        ):
+            _merge_source_names(notice, current_notice)
+            preferred[key] = (rank, notice)
+        else:
+            _merge_source_names(current_notice, notice)
     for notice in sorted(
         (value[1] for value in preferred.values()),
         key=lambda item: (item.published_at, item.title),
         reverse=True,
     ):
-        label = _effective_label(notice)
+        label = _effective_label(notice, day)
         if label == "keep":
             digest.keep.append(notice)
         elif label == "review":

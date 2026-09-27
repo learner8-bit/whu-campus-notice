@@ -130,6 +130,8 @@ def _notice_input(notice: Notice) -> str:
     payload = {
         "notice_id": notice.notice_id,
         "site": notice.site_name,
+        "channel": notice.channel,
+        "publisher": notice.publisher_name,
         "column": notice.source_name,
         "published_at": notice.published_at,
         "title": notice.title,

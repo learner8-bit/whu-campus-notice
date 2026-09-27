@@ -102,6 +102,33 @@ class NoticeStore:
                 analyzed_at TEXT NOT NULL,
                 PRIMARY KEY(notice_id, content_hash, provider, model, prompt_version)
             );
+            CREATE TABLE IF NOT EXISTS source_cursors (
+                source_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                cursor_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(source_id, provider)
+            );
+            CREATE TABLE IF NOT EXISTS provider_health (
+                publisher_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                status TEXT NOT NULL,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                last_success_at TEXT NOT NULL DEFAULT '',
+                last_error TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(publisher_id, provider)
+            );
+            CREATE TABLE IF NOT EXISTS ocr_usage (
+                month TEXT PRIMARY KEY,
+                cloud_images INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS digest_freezes (
+                day TEXT PRIMARY KEY,
+                notice_ids_json TEXT NOT NULL,
+                frozen_at TEXT NOT NULL
+            );
             """
         )
         columns = {
@@ -156,6 +183,106 @@ class NoticeStore:
             if not json.loads(row["payload_json"]).get("fetch_error")
         }
 
+    def get_cursor(self, source_id: str, provider: str) -> dict:
+        row = self.connection.execute(
+            "SELECT cursor_json FROM source_cursors WHERE source_id=? AND provider=?",
+            (source_id, provider),
+        ).fetchone()
+        return json.loads(row["cursor_json"]) if row else {}
+
+    def save_cursor(self, source_id: str, provider: str, cursor: dict) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO source_cursors(source_id, provider, cursor_json, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(source_id, provider) DO UPDATE SET "
+                "cursor_json=excluded.cursor_json, updated_at=excluded.updated_at",
+                (source_id, provider, json.dumps(cursor, ensure_ascii=False), now_shanghai()),
+            )
+
+    def record_provider_health(
+        self,
+        publisher_id: str,
+        provider: str,
+        status: str,
+        *,
+        error: str = "",
+    ) -> int:
+        row = self.connection.execute(
+            "SELECT consecutive_failures, last_success_at FROM provider_health "
+            "WHERE publisher_id=? AND provider=?",
+            (publisher_id, provider),
+        ).fetchone()
+        failures = 0 if status == "healthy" else int(row["consecutive_failures"] if row else 0) + 1
+        last_success = now_shanghai() if status == "healthy" else str(row["last_success_at"] if row else "")
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO provider_health(publisher_id, provider, status, "
+                "consecutive_failures, last_success_at, last_error, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(publisher_id, provider) "
+                "DO UPDATE SET status=excluded.status, "
+                "consecutive_failures=excluded.consecutive_failures, "
+                "last_success_at=excluded.last_success_at, "
+                "last_error=excluded.last_error, updated_at=excluded.updated_at",
+                (
+                    publisher_id,
+                    provider,
+                    status,
+                    failures,
+                    last_success,
+                    error[:500],
+                    now_shanghai(),
+                ),
+            )
+        return failures
+
+    def provider_health_rows(self) -> list[dict]:
+        rows = self.connection.execute(
+            "SELECT * FROM provider_health ORDER BY publisher_id, provider"
+        )
+        return [dict(row) for row in rows]
+
+    def freeze_digest(self, day: str, notices: Iterable[Notice]) -> None:
+        ids = list(dict.fromkeys(notice.notice_id for notice in notices))
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO digest_freezes(day, notice_ids_json, frozen_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET notice_ids_json=excluded.notice_ids_json, "
+                "frozen_at=excluded.frozen_at",
+                (day, json.dumps(ids), now_shanghai()),
+            )
+
+    def frozen_digest(self, day: str) -> list[Notice] | None:
+        row = self.connection.execute(
+            "SELECT notice_ids_json FROM digest_freezes WHERE day=?", (day,)
+        ).fetchone()
+        if row is None:
+            return None
+        ids = json.loads(row["notice_ids_json"])
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.connection.execute(
+            f"SELECT payload_json FROM notices WHERE notice_id IN ({placeholders})", ids
+        )
+        return [Notice.from_dict(json.loads(item["payload_json"])) for item in rows]
+
+    def reserve_cloud_ocr(self, *, limit: int = 900, month: str | None = None) -> bool:
+        current_month = month or datetime.now(SHANGHAI).strftime("%Y-%m")
+        row = self.connection.execute(
+            "SELECT cloud_images FROM ocr_usage WHERE month=?", (current_month,)
+        ).fetchone()
+        used = int(row["cloud_images"] if row else 0)
+        if used >= limit:
+            return False
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO ocr_usage(month, cloud_images, updated_at) VALUES (?, 1, ?) "
+                "ON CONFLICT(month) DO UPDATE SET cloud_images=cloud_images+1, "
+                "updated_at=excluded.updated_at",
+                (current_month, now_shanghai()),
+            )
+        return True
+
     def sync(
         self,
         notices: Iterable[Notice],
@@ -186,7 +313,7 @@ class NoticeStore:
                         """,
                         (
                             notice.notice_id,
-                            notice.url,
+                            notice.canonical_url or notice.url,
                             notice.site_id,
                             notice.site_name,
                             notice.source_id,
@@ -309,11 +436,19 @@ class NoticeStore:
                 "WHERE first_run_id=runs.run_id OR last_run_id=runs.run_id)",
                 (cutoff,),
             ).rowcount
+            old_ocr = self.connection.execute(
+                "DELETE FROM ocr_usage WHERE month < ?", (cutoff[:7],)
+            ).rowcount
+            freezes = self.connection.execute(
+                "DELETE FROM digest_freezes WHERE day < ?", (cutoff,)
+            ).rowcount
         return {
             "notices": notices,
             "analyses": analyses,
             "deliveries": deliveries,
             "runs": runs,
+            "ocr_months": old_ocr,
+            "digest_freezes": freezes,
         }
 
     def latest_notices(self, limit: int) -> list[Notice]:

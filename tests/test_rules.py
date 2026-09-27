@@ -15,7 +15,10 @@ from whu_notice_research.rules import decide  # noqa: E402
 class RuleTests(unittest.TestCase):
     def test_rules_v1_source_is_frozen(self) -> None:
         rules_path = ROOT / "src" / "whu_notice_research" / "rules_v1.py"
-        digest = hashlib.sha256(rules_path.read_bytes()).hexdigest()
+        # Git may check the file out with CRLF on Windows. Freeze semantic file
+        # bytes after normalizing line endings so the guard is cross-platform.
+        normalized = rules_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
         self.assertEqual(digest, "21cc5d7165fda7906c1f208423ffcc99b6709fe84c39c6535fb8af2a87780c77")
 
     def test_actionable_competition_is_kept(self) -> None:

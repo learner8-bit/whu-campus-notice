@@ -49,7 +49,7 @@ def main() -> int:
         "--channels", choices=("feishu", "email", "both"), default="feishu",
         help="Delivery channels; defaults to Feishu only",
     )
-    parser.add_argument("--days", type=int, default=3, help="Lookback window for daily scans")
+    parser.add_argument("--days", type=int, default=1, help="Lookback window for daily scans")
     parser.add_argument(
         "--digest-day",
         help="Build the digest for this YYYY-MM-DD date instead of today",
@@ -61,6 +61,18 @@ def main() -> int:
     parser.add_argument(
         "--skip-if-complete", action="store_true",
         help="Skip collection when every requested channel already succeeded for this day",
+    )
+    parser.add_argument(
+        "--no-scan", action="store_true",
+        help="Build from persisted state without contacting any source",
+    )
+    parser.add_argument(
+        "--freeze", action="store_true",
+        help="Persist the selected notice IDs as the immutable digest set for the day",
+    )
+    parser.add_argument(
+        "--use-freeze", action="store_true",
+        help="Send only the previously frozen digest set",
     )
     parser.add_argument(
         "--retention-days", type=int, default=90,
@@ -117,7 +129,7 @@ def main() -> int:
     baseline_today = []
     scan_status: dict[str, str] = {}
     health_issues: list[HealthIssue] = []
-    if not args.preview_latest:
+    if not args.preview_latest and not args.no_scan:
         for site_id in sorted(SUPPORTED_SITES):
             try:
                 result = run_incremental(
@@ -137,6 +149,8 @@ def main() -> int:
                 )
                 for notice in result.sync.new + result.sync.updated:
                     health_issues.extend(notice_health_issues(notice))
+                for detail in result.degraded_sources or []:
+                    health_issues.append(HealthIssue("wechat", "公众号", detail))
             except Exception as exc:
                 # The other site and both delivery channels remain useful.
                 scan_status[site_id] = type(exc).__name__
@@ -151,7 +165,20 @@ def main() -> int:
             full = build_digest(day, all_recent, {"preview": "ok"})
             notices = (full.keep + full.review)[: args.preview_latest]
         else:
-            notices = store.first_seen_on(day) + store.published_on(day) + baseline_today
+            if args.use_freeze:
+                frozen = store.frozen_digest(day)
+                if frozen is None:
+                    # A delayed prepare/freeze schedule must not suppress the
+                    # whole daily message. Fall back to already persisted
+                    # same-day data without contacting sources, then freeze it
+                    # immediately so compensation sends stay identical.
+                    notices = store.first_seen_on(day) + store.published_on(day)
+                    store.freeze_digest(day, notices)
+                    print(f"{day}: freeze missing; created safe no-scan fallback", file=sys.stderr)
+                else:
+                    notices = frozen
+            else:
+                notices = store.first_seen_on(day) + store.published_on(day) + baseline_today
         unique = list({item.notice_id: item for item in notices}.values())
         ai_stats = attach_ai_analyses(
             unique,
@@ -167,6 +194,9 @@ def main() -> int:
         for failure in ai_stats.failures:
             print(f"ai failure: {failure}", file=sys.stderr)
         health_issues.extend(ai_health_issues(ai_config, ai_stats, len(unique)))
+        if args.freeze:
+            store.freeze_digest(day, unique)
+            print(f"freeze: day={day} notices={len(unique)}")
         digest = build_digest(day, unique, scan_status)
         plain = render_text(digest)
         html_body = render_html(digest)

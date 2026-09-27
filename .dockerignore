@@ -9,6 +9,7 @@ __pycache__
 data/runs
 data/eis
 data/undergraduate_school
+data/private
 docs
 tests
 test_today_push.cmd

@@ -8,8 +8,9 @@ from zoneinfo import ZoneInfo
 from .enrichment import enrich_notices
 from .io import write_jsonl
 from .rules_v1 import RULESET_VERSION, decide
-from .sites import collect_site
+from .sites import WebsiteSourceAdapter
 from .storage import NoticeStore, SyncResult
+from .wechat.collector import WechatSourceAdapter
 
 
 @dataclass
@@ -18,6 +19,7 @@ class PipelineResult:
     sync: SyncResult
     fetched_count: int
     known_before: int
+    degraded_sources: list[str] | None = None
 
 
 def run_incremental(
@@ -32,13 +34,21 @@ def run_incremental(
         known = store.known_urls(site_id)
         run_id = store.start_run(site_id, "incremental" if known else "bootstrap")
         try:
-            notices = collect_site(
-                site_id,
-                days=days,
-                project_root=project_root,
-                known_urls=known,
-                incremental=bool(known),
-            )
+            degraded_sources: list[str] = []
+            if site_id == "wechat":
+                collection = WechatSourceAdapter(
+                    project_root=project_root,
+                    store=store,
+                    days=days,
+                ).collect({"days": 30 if not known else days})
+                notices = collection.notices
+                degraded_sources = collection.degraded_accounts
+            else:
+                notices = WebsiteSourceAdapter(
+                    site_id, days=days, project_root=project_root
+                ).collect(
+                    {"known_urls": list(known), "incremental": bool(known)}
+                ).notices
             # Existing state means adapters returned only unseen notices. On a
             # first bootstrap, enrich only notices published today so that a
             # fresh deployment does not download months of historical files.
@@ -65,7 +75,13 @@ def run_incremental(
             store.finish_run(run_id, sync)
             if new_output is not None:
                 write_jsonl(new_output, sync.new)
-            return PipelineResult(run_id, sync, len(notices), len(known))
+            return PipelineResult(
+                run_id,
+                sync,
+                len(notices),
+                len(known),
+                degraded_sources,
+            )
         except Exception as exc:
             empty = SyncResult()
             store.finish_run(run_id, empty, error=f"{type(exc).__name__}: {exc}")
