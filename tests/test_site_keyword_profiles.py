@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from whu_notice_research.sites import SUPPORTED_SITES  # noqa: E402
+from whu_notice_research.sites import DISABLED_SITES, SUPPORTED_SITES  # noqa: E402
 
 
 class SiteKeywordProfileTests(unittest.TestCase):
@@ -19,7 +19,14 @@ class SiteKeywordProfileTests(unittest.TestCase):
         cls.data = json.loads(path.read_text(encoding="utf-8"))
 
     def test_every_supported_site_has_a_profile(self) -> None:
-        self.assertEqual(set(self.data["sites"]), set(SUPPORTED_SITES))
+        self.assertEqual(
+            set(self.data["sites"]),
+            set(SUPPORTED_SITES) | set(DISABLED_SITES),
+        )
+
+    def test_second_classroom_is_disabled_in_production(self) -> None:
+        self.assertIn("second_classroom", DISABLED_SITES)
+        self.assertNotIn("second_classroom", SUPPORTED_SITES)
 
     def test_profiles_are_explicitly_research_only(self) -> None:
         self.assertEqual(self.data["status"], "research_only")

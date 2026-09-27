@@ -4,7 +4,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-from .adapters import generic_vsb, second_classroom, undergraduate_school
+from .adapters import generic_vsb, undergraduate_school
 from .eis import Source as EisSource
 from .eis import collect_all as collect_eis
 from .models import Notice
@@ -19,7 +19,8 @@ GENERIC_SITES = {
     "information_disclosure",
     "science_technology",
 }
-SUPPORTED_SITES = {"eis", "undergraduate_school", "second_classroom", *GENERIC_SITES}
+DISABLED_SITES = {"second_classroom"}
+SUPPORTED_SITES = {"eis", "undergraduate_school", *GENERIC_SITES}
 
 
 def collect_site(
@@ -46,12 +47,6 @@ def collect_site(
             sources = [undergraduate_school.Source(**row) for row in json.load(handle)]
         return undergraduate_school.collect_all(
             sources,
-            date.today() - timedelta(days=days),
-            known_urls=known_urls,
-            incremental=incremental,
-        )
-    if site_id == "second_classroom":
-        return second_classroom.collect_all(
             date.today() - timedelta(days=days),
             known_urls=known_urls,
             incremental=incremental,
