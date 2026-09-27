@@ -32,6 +32,8 @@ powershell -ExecutionPolicy Bypass -File scripts/configure_google_schedules.ps1
 
 脚本会配置北京时间 20:50 / 21:20 公众号同步、21:35 全站预处理、21:50 日报冻结，以及 22:00 主发送和 22:11 / 22:41 / 23:11 补偿发送。各 Scheduler 调用同一 Job，但通过 `RUN_PHASE` 覆盖选择阶段。22:00 后只读取冻结结果，不再现场爬取；缺少冻结时使用已持久化数据建立无网络回退快照。
 
+脚本还会创建项目级自定义角色 `whuNoticeJobRunner`，其中只有 `run.jobs.run` 和 `run.jobs.runWithOverrides` 两项权限，并只在该 Cloud Run Job 上授予 Scheduler 服务账号；无需使用范围更大的 Cloud Run Developer 或管理员角色。
+
 公众号凭证位于同一私有 Bucket 的 `private/wechat_credentials.json`；初始化方法和安全边界见[公众号自动采集](wechat.md)。
 
 

@@ -12,6 +12,33 @@ if (-not (Test-Path -LiteralPath $gcloud)) {
 }
 
 $uri = "https://run.googleapis.com/v2/projects/$Project/locations/$Region/jobs/${Job}:run"
+$roleId = "whuNoticeJobRunner"
+$roleResource = "projects/$Project/roles/$roleId"
+$existingRoles = @(
+    & $gcloud iam roles list --project=$Project --format="value(name.basename())"
+)
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to list project IAM roles."
+}
+if ($existingRoles -contains $roleId) {
+    & $gcloud iam roles update $roleId --project=$Project `
+        --title="WHU Notice Job Runner" `
+        --permissions=run.jobs.run,run.jobs.runWithOverrides --stage=GA
+}
+else {
+    & $gcloud iam roles create $roleId --project=$Project `
+        --title="WHU Notice Job Runner" `
+        --permissions=run.jobs.run,run.jobs.runWithOverrides --stage=GA
+}
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to configure the least-privilege scheduler role."
+}
+& $gcloud run jobs add-iam-policy-binding $Job --project=$Project --region=$Region `
+    --member="serviceAccount:$SchedulerServiceAccount" --role=$roleResource
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to grant the scheduler role on $Job."
+}
+
 $schedules = @(
     @{ Name = "whu-notice-wechat-primary"; Cron = "50 20 * * *"; Phase = "wechat-sync" },
     @{ Name = "whu-notice-wechat-retry"; Cron = "20 21 * * *"; Phase = "wechat-sync" },
@@ -42,27 +69,37 @@ foreach ($item in $schedules) {
             )
         }
     } | ConvertTo-Json -Depth 8 -Compress
-
-    if ($existingJobs -contains $name) {
-        & $gcloud scheduler jobs update http $name `
-            --project=$Project --location=$Region --schedule=$cron `
-            --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
-            --oauth-service-account-email=$SchedulerServiceAccount `
-            --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
-            --update-headers=Content-Type=application/json --message-body=$body `
-            --attempt-deadline=180s
+    $bodyFile = [System.IO.Path]::GetTempFileName()
+    try {
+        [System.IO.File]::WriteAllText(
+            $bodyFile,
+            $body,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        if ($existingJobs -contains $name) {
+            & $gcloud scheduler jobs update http $name `
+                --project=$Project --location=$Region --schedule=$cron `
+                --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
+                --oauth-service-account-email=$SchedulerServiceAccount `
+                --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
+                --update-headers=Content-Type=application/json `
+                --message-body-from-file=$bodyFile --attempt-deadline=180s
+        }
+        else {
+            & $gcloud scheduler jobs create http $name `
+                --project=$Project --location=$Region --schedule=$cron `
+                --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
+                --oauth-service-account-email=$SchedulerServiceAccount `
+                --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
+                --headers=Content-Type=application/json `
+                --message-body-from-file=$bodyFile --attempt-deadline=180s
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to configure $name."
+        }
     }
-    else {
-        & $gcloud scheduler jobs create http $name `
-            --project=$Project --location=$Region --schedule=$cron `
-            --time-zone=Asia/Shanghai --uri=$uri --http-method=POST `
-            --oauth-service-account-email=$SchedulerServiceAccount `
-            --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform `
-            --headers=Content-Type=application/json --message-body=$body `
-            --attempt-deadline=180s
-    }
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to configure $name."
+    finally {
+        Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue
     }
 }
 
