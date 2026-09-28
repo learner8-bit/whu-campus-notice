@@ -73,6 +73,10 @@ class ProviderResult:
     cursor: dict[str, Any] = field(default_factory=dict)
     status: str = "healthy"
     error: str = ""
+    # False means this provider was intentionally skipped (for example, a
+    # once-per-day query already ran or the account has no public album).
+    # Skips must not reset or increment consecutive health failures.
+    attempted: bool = True
 
     def __post_init__(self) -> None:
         if self.status not in HEALTH_STATES:

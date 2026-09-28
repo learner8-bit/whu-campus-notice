@@ -22,6 +22,14 @@ from whu_notice_research.wechat.weread import (  # noqa: E402
     WeReadAuthExpired,
     WeReadCredentials,
     WeReadMobileClient,
+    encode_web_id,
+)
+from whu_notice_research.wechat.models import WechatAccount  # noqa: E402
+from whu_notice_research.wechat.providers import (  # noqa: E402
+    MessageAlbumProvider,
+    SogouProvider,
+    WeReadProvider,
+    _articles_from_weread_web,
 )
 
 
@@ -133,6 +141,66 @@ class WechatTests(unittest.TestCase):
         }
         digest = build_digest("2026-09-27", [notice], {})
         self.assertEqual(digest.candidate_count, 0)
+
+    def test_missing_album_is_skipped_without_claiming_healthy(self) -> None:
+        result = MessageAlbumProvider().sync(
+            WechatAccount(id="whu", display_name="武汉大学"), {}
+        )
+        self.assertFalse(result.attempted)
+        self.assertEqual(result.status, "unavailable")
+
+    def test_sogou_runs_at_most_once_per_day(self) -> None:
+        today = __import__("datetime").datetime.now().date().isoformat()
+        result = SogouProvider().sync(
+            WechatAccount(id="whu", display_name="武汉大学"),
+            {"queried_on": today, "last_status": "degraded", "last_error": "无结果"},
+        )
+        self.assertFalse(result.attempted)
+        self.assertEqual(result.status, "degraded")
+
+    def test_weread_cooldown_does_not_repeat_request(self) -> None:
+        tomorrow = (__import__("datetime").datetime.now().date() + __import__("datetime").timedelta(days=1)).isoformat()
+        provider = WeReadProvider(
+            WeReadCredentials(vid="123", accessToken="token"),
+            persist_credentials=lambda value: None,
+        )
+        result = provider.sync(
+            WechatAccount(id="whu", display_name="武汉大学", book_id="MP_WXS_1"),
+            {"retry_after": tomorrow, "last_error": "-2041"},
+        )
+        self.assertFalse(result.attempted)
+        self.assertEqual(result.status, "rate_limited")
+
+    def test_weread_web_response_supports_multi_article_push(self) -> None:
+        account = WechatAccount(
+            id="whu", display_name="武汉大学", book_id="MP_WXS_1"
+        )
+        payload = {
+            "reviews": [
+                {
+                    "subReviews": [
+                        {
+                            "review": {
+                                "reviewId": "MP_WXS_1_token",
+                                "createTime": 1790524800,
+                                "mpInfo": {
+                                    "title": "竞赛报名通知",
+                                    "originalId": "article-token",
+                                },
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        articles = _articles_from_weread_web(payload, account)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].title, "竞赛报名通知")
+        self.assertEqual(articles[0].url, "https://mp.weixin.qq.com/s/article-token")
+        self.assertEqual(articles[0].provider, "weread_web")
+
+    def test_weread_web_id_encoder_matches_known_example(self) -> None:
+        self.assertEqual(encode_web_id("43208843"), "c9c321c07293508bc9c79df")
 
 
 if __name__ == "__main__":

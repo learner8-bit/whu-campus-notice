@@ -12,7 +12,13 @@ from .article import WechatContentBlocked, fetch_article
 from .identity import canonicalize_wechat_url, wechat_article_key
 from .models import CollectionResult, ProviderResult, WechatAccount, WechatArticle
 from .ocr import ocr_article_images
-from .providers import MessageAlbumProvider, SogouProvider, WebsiteMirrorProvider, WeReadProvider
+from .providers import (
+    MessageAlbumProvider,
+    SogouProvider,
+    WebsiteMirrorProvider,
+    WeReadProvider,
+    WeReadWebProvider,
+)
 from .weread import load_credentials, save_credentials
 
 
@@ -40,7 +46,7 @@ def load_accounts(path: Path) -> list[WechatAccount]:
     return accounts
 
 
-def _provider_map(credentials_path: Path):
+def _provider_map(credentials_path: Path, web_state_path: Path):
     providers = {
         "message_album": MessageAlbumProvider(),
         "sogou": SogouProvider(),
@@ -52,11 +58,13 @@ def _provider_map(credentials_path: Path):
             credentials,
             persist_credentials=lambda value: save_credentials(credentials_path, value),
         )
+    if web_state_path.exists():
+        providers["weread_web"] = WeReadWebProvider(web_state_path)
     return providers
 
 
 def _merge_articles(values: list[WechatArticle]) -> list[WechatArticle]:
-    priority = {"weread": 3, "message_album": 2, "sogou": 1}
+    priority = {"weread_web": 4, "weread": 3, "message_album": 2, "sogou": 1}
     merged: dict[str, WechatArticle] = {}
     for article in values:
         article.url = canonicalize_wechat_url(article.url)
@@ -119,6 +127,10 @@ def collect_wechat(
         os.getenv("WECHAT_CREDENTIALS_FILE", "").strip()
         or project_root / "data" / "private" / "wechat_credentials.json"
     )
+    web_state_path = Path(
+        os.getenv("WECHAT_WEB_STATE_FILE", "").strip()
+        or project_root / "data" / "private" / "weread_web_state.json"
+    )
     today = datetime.now(SHANGHAI).date().isoformat()
     accounts = [
         item for item in load_accounts(registry)
@@ -126,7 +138,7 @@ def collect_wechat(
     ]
     if not accounts:
         return CollectionResult()
-    providers = _provider_map(credentials_path)
+    providers = _provider_map(credentials_path, web_state_path)
     result = CollectionResult()
     threshold = (datetime.now(SHANGHAI).date() - timedelta(days=max(days, 1))).isoformat()
     all_articles: list[tuple[WechatAccount, WechatArticle]] = []
@@ -135,23 +147,29 @@ def collect_wechat(
         for provider_name in account.providers:
             provider = providers.get(provider_name)
             if provider is None:
-                status = "auth_expired" if provider_name == "weread" else "unavailable"
+                status = "auth_expired" if provider_name in {"weread", "weread_web"} else "unavailable"
                 provider_result = ProviderResult(
                     provider_name,
                     status=status,
-                    error="微信读书凭证不存在" if provider_name == "weread" else "采集器不可用",
+                    error=(
+                        "微信读书凭证不存在"
+                        if provider_name in {"weread", "weread_web"}
+                        else "采集器不可用"
+                    ),
                 )
             else:
                 cursor = store.get_cursor(account.id, provider_name)
                 provider_result = provider.sync(account, cursor)
                 if provider_result.cursor:
                     store.save_cursor(account.id, provider_name, provider_result.cursor)
-            failures = store.record_provider_health(
-                account.id,
-                provider_name,
-                provider_result.status,
-                error=provider_result.error,
-            )
+            failures = 0
+            if provider_result.attempted:
+                failures = store.record_provider_health(
+                    account.id,
+                    provider_name,
+                    provider_result.status,
+                    error=provider_result.error,
+                )
             # Only escalate a source after three consecutive failures. A
             # healthy alternate provider keeps coverage in degraded mode.
             if failures >= 3:
@@ -166,6 +184,11 @@ def collect_wechat(
             if article.published_at and article.published_at < threshold:
                 continue
             all_articles.append((account, article))
+
+    for provider in providers.values():
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
 
     # Union all providers first. Exact WeChat identity wins over provider name.
     unique: dict[str, tuple[WechatAccount, WechatArticle]] = {}

@@ -1,0 +1,4 @@
+# Optional dependency for the one-time WeRead Web initializer and the
+# browser-backed provider. It is intentionally excluded from the default
+# Cloud image until the saved session passes a CAPTCHA-free shadow run.
+playwright>=1.55,<2

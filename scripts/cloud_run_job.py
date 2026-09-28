@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL_DATABASE = Path("/tmp/whu-notice/notices.sqlite3")
 LOCAL_OUTPUT = Path("/tmp/whu-notice/runs")
 LOCAL_WECHAT_CREDENTIALS = Path("/tmp/whu-notice/private/wechat_credentials.json")
+LOCAL_WECHAT_WEB_STATE = Path("/tmp/whu-notice/private/weread_web_state.json")
 BASELINE_DATABASE = ROOT / "data" / "state" / "notices.sqlite3"
 BEIJING_TIME = timezone(timedelta(hours=8))
 
@@ -101,6 +102,7 @@ def run_digest() -> int:
     digest_day = os.getenv("DIGEST_DAY", "").strip()
     test_mode = environment_flag("TEST_MODE")
     os.environ["WECHAT_CREDENTIALS_FILE"] = str(LOCAL_WECHAT_CREDENTIALS)
+    os.environ["WECHAT_WEB_STATE_FILE"] = str(LOCAL_WECHAT_WEB_STATE)
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     phase = os.getenv("RUN_PHASE", "send").strip().lower()
     if phase == "wechat-sync":
@@ -181,6 +183,9 @@ def main() -> int:
     credential_object = os.getenv(
         "WECHAT_CREDENTIAL_OBJECT", "private/wechat_credentials.json"
     ).strip()
+    web_state_object = os.getenv(
+        "WECHAT_WEB_STATE_OBJECT", "private/weread_web_state.json"
+    ).strip()
     lock_object = os.getenv("LOCK_OBJECT", "locks/daily-digest.lock").strip()
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -194,6 +199,9 @@ def main() -> int:
         credential_generation, original_credentials = download_optional_private(
             bucket, credential_object, LOCAL_WECHAT_CREDENTIALS
         )
+        web_state_generation, original_web_state = download_optional_private(
+            bucket, web_state_object, LOCAL_WECHAT_WEB_STATE
+        )
         exit_code = run_digest()
         if test_mode:
             print("test mode: production state was not uploaded")
@@ -205,6 +213,13 @@ def main() -> int:
                 LOCAL_WECHAT_CREDENTIALS,
                 credential_generation,
                 original_credentials,
+            )
+            upload_private_if_changed(
+                bucket,
+                web_state_object,
+                LOCAL_WECHAT_WEB_STATE,
+                web_state_generation,
+                original_web_state,
             )
         return exit_code
     finally:

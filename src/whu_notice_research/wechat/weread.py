@@ -275,6 +275,23 @@ def book_id_from_biz(value: str) -> str:
     return f"MP_WXS_{_decode_biz(value)}"
 
 
+def encode_web_id(value: str | int) -> str:
+    """Encode a WeRead ID for the official Web reader route."""
+    source = str(value)
+    digest = hashlib.md5(source.encode()).hexdigest()
+    if source.isdigit():
+        code = "3"
+        chunks = [format(int(source[index:index + 9]), "x") for index in range(0, len(source), 9)]
+    else:
+        code = "4"
+        chunks = ["".join(format(ord(character), "x") for character in source)]
+    result = digest[:3] + code + "2" + digest[-2:]
+    result += "g".join(f"{len(chunk):02x}{chunk}" for chunk in chunks)
+    if len(result) < 20:
+        result += digest[:20 - len(result)]
+    return result + hashlib.md5(result.encode()).hexdigest()[:3]
+
+
 def _check_error(payload: dict[str, Any]) -> None:
     code = int(payload.get("errcode", payload.get("errCode", 0)) or 0)
     if not code:

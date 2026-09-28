@@ -28,6 +28,9 @@ def main() -> int:
         f"wechat: fetched={result.fetched_count} new={len(result.sync.new)} "
         f"updated={len(result.sync.updated)} degraded={len(result.degraded_sources or [])}"
     )
+    if result.degraded_sources:
+        for source in result.degraded_sources:
+            print(f"wechat degraded: {source}")
     return 0
 
 
