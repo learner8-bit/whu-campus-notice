@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,9 +18,17 @@ from whu_notice_research.wechat.identity import (  # noqa: E402
     canonicalize_wechat_url,
     wechat_article_key,
 )
+from whu_notice_research.wechat.weread import (  # noqa: E402
+    WeReadAuthExpired,
+    WeReadCredentials,
+    WeReadMobileClient,
+)
 
 
 class WechatTests(unittest.TestCase):
+    def _weread_client(self) -> WeReadMobileClient:
+        return WeReadMobileClient(WeReadCredentials(vid="123", accessToken="token"))
+
     def test_long_link_identity_ignores_share_tracking(self) -> None:
         first = "https://mp.weixin.qq.com/s?__biz=abc%3D%3D&mid=123&idx=2&scene=1"
         second = "https://mp.weixin.qq.com/s?mid=123&idx=2&__biz=abc%3D%3D&from=timeline"
@@ -32,6 +41,24 @@ class WechatTests(unittest.TestCase):
     def test_short_link_has_stable_url_key(self) -> None:
         url = "https://mp.weixin.qq.com/s/A_B-c123?scene=2"
         self.assertEqual(wechat_article_key(url), wechat_article_key(url + "&from=timeline"))
+
+    def test_weread_book_info_returns_public_account_metadata(self) -> None:
+        client = self._weread_client()
+        response = Mock(status_code=200)
+        response.json.return_value = {"bookId": "MP_WXS_1", "title": "武汉大学"}
+        client.session.get = Mock(return_value=response)
+
+        payload = client.get_book_info("MP_WXS_1")
+
+        self.assertEqual(payload["title"], "武汉大学")
+        response.raise_for_status.assert_called_once()
+
+    def test_weread_book_info_rejects_expired_session(self) -> None:
+        client = self._weread_client()
+        client.session.get = Mock(return_value=Mock(status_code=403))
+
+        with self.assertRaises(WeReadAuthExpired):
+            client.get_book_info("MP_WXS_1")
 
     def test_article_parser_extracts_text_links_files_and_images(self) -> None:
         source = """

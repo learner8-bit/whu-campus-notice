@@ -296,6 +296,24 @@ class WeReadMobileClient:
             {**VERSION_HEADERS, "vid": credentials.vid, "accessToken": credentials.accessToken}
         )
 
+    def get_book_info(self, book_id: str) -> dict[str, Any]:
+        """Return public metadata for a WeRead book/public-account identifier."""
+        response = self.session.get(
+            f"{WEREAD_BASE}/book/info",
+            params={"bookId": str(book_id).strip()},
+            timeout=self.timeout,
+        )
+        if response.status_code in {401, 403}:
+            raise WeReadAuthExpired(f"HTTP {response.status_code}")
+        if response.status_code == 429:
+            raise WeReadRateLimited("HTTP 429")
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise WeReadError("公众号信息返回格式异常")
+        _check_error(payload)
+        return payload
+
     def get_articles(self, account: WechatAccount, *, count: int = 30, synckey: int = 0) -> list[WechatArticle]:
         book_id = account.book_id or (book_id_from_biz(account.biz) if account.biz else "")
         if not book_id:

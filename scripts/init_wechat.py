@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -21,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from whu_notice_research.wechat.models import WechatAccount  # noqa: E402
 from whu_notice_research.wechat.weread import (  # noqa: E402
     WeReadAuthClient,
+    WeReadMobileClient,
     book_id_from_biz,
     load_credentials,
     save_credentials,
@@ -33,8 +37,64 @@ HEADERS = {
 }
 
 
-def _discover_account(account: WechatAccount) -> dict[str, str]:
+def _normalize_name(value: str) -> str:
+    return re.sub(r"[\s·•_\-—]+", "", str(value or "")).casefold()
+
+
+def _biz_from_seed(source: str, resolved_url: str) -> str:
+    query = parse_qs(urlparse(resolved_url.replace("&amp;", "&")).query)
+    biz = str((query.get("__biz") or query.get("biz") or [""])[0]).strip()
+    if biz:
+        return biz
+    patterns = (
+        r"(?:window\.)?biz\s*=\s*['\"]([^'\"]+)['\"]",
+        r"var\s+biz\s*=\s*['\"]([^'\"]+)['\"]",
+        r"__biz\s*=\s*['\"]([^'\"]+)['\"]",
+        r"(?:window\.)?msg_link\s*=\s*['\"](.+?)['\"]\s*;",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, source, re.I | re.S)
+        if not match:
+            continue
+        value = html.unescape(match.group(1)).replace(r"\/", "/")
+        value = value.replace(r"\x26", "&").replace(r"\u0026", "&")
+        nested = parse_qs(urlparse(value).query)
+        candidate = str((nested.get("__biz") or nested.get("biz") or [value])[0]).strip()
+        try:
+            book_id_from_biz(candidate)
+        except Exception:
+            continue
+        return candidate
+    return ""
+
+
+def _discover_from_seed(account: WechatAccount, client: WeReadMobileClient) -> dict[str, str]:
+    response = requests.get(account.seed_url, headers=HEADERS, timeout=20, allow_redirects=True)
+    response.raise_for_status()
+    if any(marker in response.text for marker in ("当前环境异常", "完成验证后即可继续访问", "访问过于频繁")):
+        raise RuntimeError("微信种子文章要求人工验证，本次初始化停止")
+    biz = _biz_from_seed(response.text, response.url)
+    if not biz:
+        raise RuntimeError("种子文章中没有解析到公众号 biz")
+    book_id = book_id_from_biz(biz)
+    info = client.get_book_info(book_id)
+    upstream_name = str(info.get("title") or "").strip()
+    if _normalize_name(upstream_name) != _normalize_name(account.display_name):
+        raise RuntimeError(
+            f"微信读书返回账号“{upstream_name or '未知'}”，与配置名称不一致"
+        )
+    return {
+        "biz": biz,
+        "book_id": book_id,
+        "seed_url": account.seed_url,
+        "verified_account_name": upstream_name,
+    }
+
+
+def _discover_account(account: WechatAccount, client: WeReadMobileClient) -> dict[str, str]:
     """Low-frequency Sogou bootstrap; never retries a challenge response."""
+    if account.seed_url:
+        return _discover_from_seed(account, client)
     session = requests.Session()
     search = "https://weixin.sogou.com/weixin?type=1&query=" + quote(account.display_name)
     response = session.get(search, headers=HEADERS, timeout=20)
@@ -94,17 +154,32 @@ def _discover_account(account: WechatAccount) -> dict[str, str]:
 
 
 def _upload_private(path: Path, bucket_name: str, object_name: str) -> None:
-    from google.api_core.exceptions import NotFound
-    from google.cloud import storage
-
-    bucket = storage.Client().bucket(bucket_name)
-    blob = bucket.blob(object_name)
     try:
-        blob.reload()
-        generation = blob.generation
-    except NotFound:
-        generation = 0
-    blob.upload_from_filename(path, if_generation_match=generation)
+        from google.api_core.exceptions import NotFound
+        from google.auth.exceptions import DefaultCredentialsError
+        from google.cloud import storage
+
+        bucket = storage.Client().bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        try:
+            blob.reload()
+            generation = blob.generation
+        except NotFound:
+            generation = 0
+        blob.upload_from_filename(path, if_generation_match=generation)
+    except (DefaultCredentialsError, OSError):
+        executable = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+        if not executable and os.name == "nt":
+            candidate = Path(os.environ.get("LOCALAPPDATA", "")) / (
+                "Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd"
+            )
+            executable = str(candidate) if candidate.exists() else ""
+        if not executable:
+            raise RuntimeError("未找到可用的 Google Cloud 登录或 gcloud 命令") from None
+        subprocess.run(
+            [executable, "storage", "cp", str(path), f"gs://{bucket_name}/{object_name}"],
+            check=True,
+        )
     print(f"已上传私有凭证：gs://{bucket_name}/{object_name}")
 
 
@@ -123,7 +198,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.credentials.exists():
-        load_credentials(args.credentials)
+        credentials = load_credentials(args.credentials)
         print("微信读书凭证已存在且格式有效，跳过扫码。")
     else:
         client = WeReadAuthClient()
@@ -139,23 +214,33 @@ def main() -> int:
         print("扫码成功，凭证已保存到不会提交 Git 的私有目录。")
 
     if not args.skip_discovery:
+        mobile_client = WeReadMobileClient(credentials)
         payload = json.loads(args.registry.read_text(encoding="utf-8"))
         rows = payload["accounts"]
         for row in rows:
             account = WechatAccount.from_mapping(row)
             try:
-                discovered = _discover_account(account)
+                discovered = _discover_account(account, mobile_client)
             except Exception as exc:
                 print(f"{account.display_name}: 暂未启用（{exc}）")
                 continue
             row.update(discovered)
             row["verified"] = True
             row["enabled"] = True
-            rollout_day = date.today() + timedelta(days=7)
-            rank = int(row.get("rollout_rank") or 999)
-            row["enabled_after"] = date.today().isoformat() if rank <= 3 else rollout_day.isoformat()
-            row["shadow_until"] = rollout_day.isoformat()
             print(f"{account.display_name}: 已核验并启用")
+        rollout_day = date.today() + timedelta(days=7)
+        verified_rows = sorted(
+            (row for row in rows if row.get("verified") and row.get("enabled")),
+            key=lambda row: int(row.get("rollout_rank") or 999),
+        )
+        first_wave_ids = {str(row.get("id")) for row in verified_rows[:3]}
+        for row in verified_rows:
+            row["enabled_after"] = (
+                date.today().isoformat()
+                if str(row.get("id")) in first_wave_ids
+                else rollout_day.isoformat()
+            )
+            row["shadow_until"] = rollout_day.isoformat()
         args.registry.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
