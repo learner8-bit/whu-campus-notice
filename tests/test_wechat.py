@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +16,7 @@ from whu_notice_research.storage import NoticeStore  # noqa: E402
 from whu_notice_research.wechat.article import parse_article_html  # noqa: E402
 from whu_notice_research.wechat.identity import (  # noqa: E402
     canonicalize_wechat_url,
+    parse_article_biz,
     wechat_article_key,
 )
 from whu_notice_research.wechat.weread import (  # noqa: E402
@@ -157,6 +158,108 @@ class WechatTests(unittest.TestCase):
         )
         self.assertFalse(result.attempted)
         self.assertEqual(result.status, "degraded")
+
+    def test_sogou_rebuilds_split_javascript_redirect(self) -> None:
+        source = """
+        <script>
+        var url = 'https://mp.weixin.qq.com';
+        url += '/s?__biz=MzA5MjM3MzUxMA%3D%3D';
+        url += '\\x26mid=123\\x26idx=1';
+        window.location.replace(url);
+        </script>
+        """
+        resolved = SogouProvider._redirect_from_script(source)
+        self.assertEqual(
+            resolved,
+            "https://mp.weixin.qq.com/s?__biz=MzA5MjM3MzUxMA%3D%3D&mid=123&idx=1",
+        )
+
+    def test_sogou_keeps_only_exact_publisher_rows(self) -> None:
+        source = """
+        <ul class="news-list">
+          <li id="sogou_vr_1_box_0"><div class="txt-box"><h3><a href="/link?url=a">官方通知</a></h3>
+          <p class="txt-info">报名摘要</p><div class="s-p"><span class="all-time-y2">武汉大学</span>
+          <script>timeConvert('1790524800')</script></div></div></li>
+          <li id="sogou_vr_1_box_1"><div class="txt-box"><h3><a href="/link?url=b">同名转载</a></h3>
+          <div class="s-p"><span class="all-time-y2">武汉大学生</span></div></div></li>
+        </ul>
+        """
+        rows = SogouProvider._search_rows(
+            source,
+            "https://weixin.sogou.com/weixin?type=2",
+            WechatAccount(id="whu", display_name="武汉大学"),
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "官方通知")
+        self.assertEqual(rows[0]["summary"], "报名摘要")
+        self.assertEqual(rows[0]["published_at"], "2026-09-28")
+
+    def test_sogou_old_index_results_are_normal_no_new_state(self) -> None:
+        source = """
+        <li id="sogou_vr_1_box_0"><div class="txt-box"><h3><a href="/link?url=old">旧通知</a></h3>
+        <div class="s-p"><span class="all-time-y2">武汉大学</span>
+        <script>timeConvert('1609459200')</script></div></div></li>
+        """
+        response = Mock(status_code=200, text=source, url="https://weixin.sogou.com/weixin?type=2")
+        response.raise_for_status = Mock()
+        session = Mock()
+        session.headers = {}
+        session.get.return_value = response
+        with patch(
+            "whu_notice_research.wechat.providers.requests.Session",
+            return_value=session,
+        ):
+            result = SogouProvider().sync(
+                WechatAccount(id="whu", display_name="武汉大学", biz="MzA5MjM3MzUxMA=="),
+                {},
+            )
+        self.assertEqual(result.status, "healthy")
+        self.assertEqual(result.articles, [])
+        self.assertEqual(session.get.call_count, 1)
+
+    def test_sogou_resolved_article_must_match_official_biz(self) -> None:
+        account = WechatAccount(
+            id="whu",
+            display_name="武汉大学",
+            biz="MzA5MjM3MzUxMA==",
+        )
+        redirect = Mock(
+            status_code=200,
+            url="https://weixin.sogou.com/link?url=token",
+            text=(
+                "var url='https://mp.weixin.qq.com';"
+                "url+='/s?__biz=MzA5MjM3MzUxMA%3D%3D&mid=1&idx=1';"
+            ),
+        )
+        redirect.raise_for_status = Mock()
+        article_page = Mock(
+            status_code=200,
+            url="https://mp.weixin.qq.com/s?__biz=MzA5MjM3MzUxMA%3D%3D&mid=1&idx=1",
+            text="var biz = 'MzA5MjM3MzUxMA==';",
+        )
+        article_page.raise_for_status = Mock()
+        session = Mock()
+        session.get.side_effect = [redirect, article_page]
+        article = SogouProvider._resolve_article(
+            session,
+            {
+                "title": "官方通知",
+                "summary": "摘要",
+                "published_at": "2026-09-28",
+                "redirect_url": redirect.url,
+            },
+            referer="https://weixin.sogou.com/weixin?type=2",
+            account=account,
+        )
+        self.assertIsNotNone(article)
+        self.assertEqual(article.publisher_id, "whu")
+        self.assertEqual(parse_article_biz(article.url), account.biz)
+
+    def test_biz_parser_reads_article_html(self) -> None:
+        self.assertEqual(
+            parse_article_biz("https://mp.weixin.qq.com/s/token", "var biz='MzA5MjM3MzUxMA==';"),
+            "MzA5MjM3MzUxMA==",
+        )
 
     def test_weread_cooldown_does_not_repeat_request(self) -> None:
         tomorrow = (__import__("datetime").datetime.now().date() + __import__("datetime").timedelta(days=1)).isoformat()

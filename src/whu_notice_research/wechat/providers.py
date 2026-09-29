@@ -6,11 +6,12 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from urllib.parse import quote, urljoin
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
 
-from .identity import canonicalize_wechat_url, wechat_article_key
+from .identity import canonicalize_wechat_url, parse_article_biz, wechat_article_key
 from .models import ProviderResult, WechatAccount, WechatArticle
 from .weread import (
     WeReadAuthClient,
@@ -27,6 +28,7 @@ BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
     "Accept-Language": "zh-CN,zh;q=0.9",
 }
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 class WechatDiscoveryProvider(ABC):
@@ -45,7 +47,7 @@ class WeReadProvider(WechatDiscoveryProvider):
         self.persist_credentials = persist_credentials
 
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
-        today = datetime.now().date().isoformat()
+        today = datetime.now(SHANGHAI).date().isoformat()
         if str(cursor.get("retry_after") or "") > today:
             return ProviderResult(
                 self.name,
@@ -193,7 +195,7 @@ class WeReadWebProvider(WechatDiscoveryProvider):
             self._playwright = None
 
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
-        today = datetime.now().date().isoformat()
+        today = datetime.now(SHANGHAI).date().isoformat()
         if cursor.get("queried_on") == today:
             return ProviderResult(
                 self.name,
@@ -368,8 +370,163 @@ class WebsiteMirrorProvider(WechatDiscoveryProvider):
 class SogouProvider(WechatDiscoveryProvider):
     name = "sogou"
 
+    @staticmethod
+    def _is_challenge(source: str) -> bool:
+        lowered = source.casefold()
+        return (
+            "antispider" in lowered
+            or "请输入验证码" in source
+            or "访问过于频繁" in source
+            or "用户您好" in source
+        )
+
+    @staticmethod
+    def _decode_js_string(value: str) -> str:
+        value = html_lib.unescape(value).replace(r"\/", "/")
+        replacements = {
+            r"\x26": "&",
+            r"\u0026": "&",
+            r"\x3d": "=",
+            r"\u003d": "=",
+            r"\x3f": "?",
+            r"\u003f": "?",
+        }
+        for escaped, decoded in replacements.items():
+            value = value.replace(escaped, decoded)
+        return value
+
+    @classmethod
+    def _redirect_from_script(cls, source: str) -> str:
+        """Rebuild Sogou's short-lived WeChat URL without executing scripts."""
+        # Current Sogou pages build the destination through a sequence such as
+        # ``url += 'https://mp.weixin.qq.com'; url += '/s?...'``.
+        # Try this before a direct URL match: the first literal is often only a
+        # prefix and returning it early drops the timestamp/signature suffix.
+        chunks = re.findall(
+            r"(?:var\s+)?url\s*(?:=|\+=)\s*(['\"])(.*?)\1\s*;?",
+            source,
+            re.I | re.S,
+        )
+        if chunks:
+            candidate = "".join(cls._decode_js_string(value) for _, value in chunks)
+            if candidate.startswith("//mp.weixin.qq.com/"):
+                candidate = "https:" + candidate
+            if candidate.startswith("https://mp.weixin.qq.com/s"):
+                return candidate
+
+        direct = re.search(
+            r"https?://mp\.weixin\.qq\.com/s[^\s\"'<>]+",
+            source.replace(r"\/", "/"),
+            re.I,
+        )
+        if direct:
+            return cls._decode_js_string(direct.group(0))
+
+        assigned = re.search(
+            r"(?:location(?:\.href)?|window\.location(?:\.href)?)\s*=\s*"
+            r"(['\"])(https?://mp\.weixin\.qq\.com/s.*?)\1",
+            source,
+            re.I | re.S,
+        )
+        return cls._decode_js_string(assigned.group(2)) if assigned else ""
+
+    @staticmethod
+    def _search_rows(source: str, base_url: str, account: WechatAccount) -> list[dict[str, str]]:
+        soup = BeautifulSoup(source, "html.parser")
+        wanted = re.sub(r"\s+", "", account.display_name).casefold()
+        rows: list[dict[str, str]] = []
+        for block in soup.select("li[id^='sogou_vr_'], li"):
+            node = block.select_one(".txt-box h3 a[href], h3 a[href]")
+            author_node = block.select_one(".s-p .all-time-y2, span.all-time-y2")
+            if node is None or author_node is None:
+                continue
+            author = re.sub(r"\s+", "", author_node.get_text(" ", strip=True)).casefold()
+            if author != wanted:
+                continue
+            script_text = " ".join(item.get_text(" ", strip=True) for item in block.select("script"))
+            timestamp = re.search(r"timeConvert\(['\"]?(\d{10})", script_text)
+            href = urljoin(base_url, str(node.get("href") or "").strip())
+            if not href.startswith(("http://", "https://")):
+                continue
+            rows.append(
+                {
+                    "title": node.get_text(" ", strip=True),
+                    "summary": (
+                        block.select_one("p.txt-info").get_text(" ", strip=True)
+                        if block.select_one("p.txt-info")
+                        else ""
+                    ),
+                    "published_at": (
+                        datetime.fromtimestamp(int(timestamp.group(1)), SHANGHAI).date().isoformat()
+                        if timestamp
+                        else _date_from_text(block.get_text(" ", strip=True))
+                    ),
+                    "redirect_url": href,
+                }
+            )
+        return rows
+
+    @classmethod
+    def _resolve_article(
+        cls,
+        session: requests.Session,
+        row: dict[str, str],
+        *,
+        referer: str,
+        account: WechatAccount,
+    ) -> WechatArticle | None:
+        response = session.get(
+            row["redirect_url"],
+            headers={**BROWSER_HEADERS, "Referer": referer},
+            timeout=15,
+            allow_redirects=True,
+        )
+        if response.status_code == 429 or cls._is_challenge(response.text):
+            raise WeReadRateLimited("搜狗文章跳转要求验证码或已限频")
+        response.raise_for_status()
+        final_url = response.url if "mp.weixin.qq.com/s" in response.url else ""
+        if not final_url:
+            final_url = cls._redirect_from_script(response.text)
+        if "mp.weixin.qq.com/s" not in final_url:
+            return None
+
+        article_source = response.text if "mp.weixin.qq.com" in response.url else ""
+        if not article_source or parse_article_biz(final_url, article_source) != account.biz:
+            article_response = session.get(
+                final_url,
+                headers={**BROWSER_HEADERS, "Referer": "https://weixin.sogou.com/"},
+                timeout=20,
+                allow_redirects=True,
+            )
+            if article_response.status_code == 429 or cls._is_challenge(article_response.text):
+                return None
+            article_response.raise_for_status()
+            final_url = article_response.url
+            article_source = article_response.text
+        if not account.biz or parse_article_biz(final_url, article_source) != account.biz:
+            return None
+
+        title = row["title"]
+        day = row["published_at"]
+        key = wechat_article_key(
+            final_url,
+            publisher_id=account.id,
+            title=title,
+            published_at=day,
+        )
+        return WechatArticle(
+            account.id,
+            account.display_name,
+            title,
+            canonicalize_wechat_url(final_url),
+            published_at=day,
+            summary=row["summary"],
+            article_key=key,
+            provider=cls.name,
+        )
+
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
-        today = datetime.now().date().isoformat()
+        today = datetime.now(SHANGHAI).date().isoformat()
         if cursor.get("queried_on") == today:
             return ProviderResult(
                 self.name,
@@ -378,11 +535,13 @@ class SogouProvider(WechatDiscoveryProvider):
                 cursor=cursor,
                 attempted=False,
             )
-        url = "https://weixin.sogou.com/weixin?type=2&query=" + quote(account.display_name)
+        url = "https://weixin.sogou.com/weixin?type=2&ie=utf8&query=" + quote(account.display_name)
+        session = requests.Session()
+        session.headers.update(BROWSER_HEADERS)
         try:
-            response = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
-            text = response.text
-            if response.status_code == 429 or "请输入验证码" in text or "访问过于频繁" in text:
+            response = session.get(url, timeout=20)
+            source = response.text
+            if response.status_code == 429 or self._is_challenge(source):
                 return ProviderResult(
                     self.name,
                     status="rate_limited",
@@ -394,52 +553,35 @@ class SogouProvider(WechatDiscoveryProvider):
                     },
                 )
             response.raise_for_status()
-            articles = _articles_from_html(text, response.url, account, self.name)
-            if not articles:
-                soup = BeautifulSoup(text, "html.parser")
-                for node in soup.select(".txt-box h3 a[href], h3 a[href]")[:10]:
-                    candidate = str(node.get("href") or "")
-                    if candidate.startswith("/"):
-                        candidate = "https://weixin.sogou.com" + candidate
-                    if not candidate.startswith("http"):
-                        continue
-                    try:
-                        resolved = requests.get(
-                            candidate,
-                            headers={**BROWSER_HEADERS, "Referer": response.url},
-                            timeout=15,
-                            allow_redirects=True,
-                        )
-                    except requests.RequestException:
-                        continue
-                    final_url = resolved.url
-                    if "mp.weixin.qq.com/s" not in final_url:
-                        match = re.search(
-                            r"(?:url|location\.href)\s*=\s*['\"](https?://mp\.weixin\.qq\.com/s[^'\"]+)",
-                            resolved.text.replace(r"\/", "/").replace(r"\u0026", "&"),
-                        )
-                        final_url = html_lib.unescape(match.group(1)) if match else ""
-                    if "mp.weixin.qq.com/s" not in final_url:
-                        continue
-                    title = node.get_text(" ", strip=True)
-                    day = _date_from_text(node.parent.parent.get_text(" ", strip=True))
-                    key = wechat_article_key(
-                        final_url,
-                        publisher_id=account.id,
-                        title=title,
-                        published_at=day,
+            rows = self._search_rows(source, response.url, account)[:10]
+            cutoff = (datetime.now(SHANGHAI).date() - timedelta(days=30)).isoformat()
+            rows = [row for row in rows if not row["published_at"] or row["published_at"] >= cutoff]
+            if not rows:
+                previous = [str(item) for item in cursor.get("last_keys", [])]
+                return ProviderResult(
+                    self.name,
+                    cursor={
+                        "queried_on": today,
+                        "last_keys": previous[:200],
+                        "last_status": "healthy",
+                        "last_error": "",
+                    },
+                )
+            articles: list[WechatArticle] = []
+            for row in rows:
+                try:
+                    article = self._resolve_article(
+                        session,
+                        row,
+                        referer=response.url,
+                        account=account,
                     )
-                    articles.append(
-                        WechatArticle(
-                            account.id,
-                            account.display_name,
-                            title,
-                            canonicalize_wechat_url(final_url),
-                            published_at=day,
-                            article_key=key,
-                            provider=self.name,
-                        )
-                    )
+                except WeReadRateLimited:
+                    raise
+                except requests.RequestException:
+                    continue
+                if article is not None:
+                    articles.append(article)
             previous = {str(item) for item in cursor.get("last_keys", [])}
             unseen = [item for item in articles if item.article_key not in previous]
             keys = list(dict.fromkeys([item.article_key for item in articles] + list(previous)))[:200]
@@ -454,6 +596,17 @@ class SogouProvider(WechatDiscoveryProvider):
                 },
                 status="healthy" if articles else "degraded",
                 error="" if articles else "搜索结果没有可验证文章",
+            )
+        except WeReadRateLimited as exc:
+            return ProviderResult(
+                self.name,
+                status="rate_limited",
+                error=str(exc),
+                cursor={
+                    "queried_on": today,
+                    "last_status": "rate_limited",
+                    "last_error": str(exc),
+                },
             )
         except Exception as exc:
             return ProviderResult(

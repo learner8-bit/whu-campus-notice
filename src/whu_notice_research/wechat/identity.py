@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -41,6 +42,29 @@ def parse_article_identity(url: str) -> tuple[str, str, str]:
         str(values.get("mid") or "").strip(),
         str(values.get("idx") or "").strip(),
     )
+
+
+def parse_article_biz(url: str, source: str = "") -> str:
+    """Extract and normalize the official-account identity from URL or HTML."""
+    biz, _, _ = parse_article_identity(url)
+    if biz:
+        return biz
+    patterns = (
+        r"(?:window\.)?biz\s*=\s*['\"]([^'\"]+)['\"]",
+        r"(?:window\.)?__biz\s*=\s*['\"]([^'\"]+)['\"]",
+        r"(?:window\.)?msg_link\s*=\s*['\"](.+?)['\"]\s*;",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, source, re.I | re.S)
+        if not match:
+            continue
+        value = html.unescape(match.group(1)).replace(r"\/", "/")
+        value = value.replace(r"\x26", "&").replace(r"\u0026", "&")
+        nested, _, _ = parse_article_identity(value)
+        candidate = nested or value
+        if re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", candidate):
+            return candidate
+    return ""
 
 
 def wechat_article_key(
