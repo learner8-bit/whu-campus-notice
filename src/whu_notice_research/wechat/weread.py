@@ -322,8 +322,8 @@ class WeReadMobileClient:
         )
         if response.status_code in {401, 403}:
             raise WeReadAuthExpired(f"HTTP {response.status_code}")
-        if response.status_code == 429:
-            raise WeReadRateLimited("HTTP 429")
+        if response.status_code in {429, 499}:
+            raise WeReadRateLimited(f"HTTP {response.status_code}")
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
@@ -342,8 +342,8 @@ class WeReadMobileClient:
         )
         if response.status_code in {401, 403}:
             raise WeReadAuthExpired(f"HTTP {response.status_code}")
-        if response.status_code == 429:
-            raise WeReadRateLimited("HTTP 429")
+        if response.status_code in {429, 499}:
+            raise WeReadRateLimited(f"HTTP {response.status_code}")
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):

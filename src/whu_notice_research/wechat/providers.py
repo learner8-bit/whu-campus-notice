@@ -46,6 +46,16 @@ class WeReadProvider(WechatDiscoveryProvider):
         self.credentials = credentials
         self.persist_credentials = persist_credentials
 
+    @staticmethod
+    def _cooldown(cursor: dict, exc: Exception) -> ProviderResult:
+        retry_after = (datetime.now(SHANGHAI).date() + timedelta(days=1)).isoformat()
+        return ProviderResult(
+            "weread",
+            status="rate_limited",
+            error=f"微信读书要求动态校验（{exc}），已冷却至次日",
+            cursor={**cursor, "retry_after": retry_after, "last_error": str(exc)},
+        )
+
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
         today = datetime.now(SHANGHAI).date().isoformat()
         if str(cursor.get("retry_after") or "") > today:
@@ -67,19 +77,15 @@ class WeReadProvider(WechatDiscoveryProvider):
                 articles = WeReadMobileClient(self.credentials).get_articles(account, count=30)
             except WeReadAuthExpired as exc:
                 return ProviderResult(self.name, status="auth_expired", error=str(exc))
+            except WeReadRateLimited as exc:
+                return self._cooldown(cursor, exc)
             except Exception as exc:
                 return ProviderResult(self.name, status="unavailable", error=str(exc))
         except WeReadRateLimited as exc:
             # -2041 is currently also used when WeRead requires its dynamic
             # web proof. Repeated requests cannot repair it and may increase
             # risk control, so do not try this provider again on the same day.
-            retry_after = (datetime.now().date() + timedelta(days=1)).isoformat()
-            return ProviderResult(
-                self.name,
-                status="rate_limited",
-                error=f"微信读书要求动态校验（{exc}），已冷却至次日",
-                cursor={**cursor, "retry_after": retry_after, "last_error": str(exc)},
-            )
+            return self._cooldown(cursor, exc)
         except Exception as exc:
             return ProviderResult(self.name, status="unavailable", error=str(exc))
         previous = {str(item) for item in cursor.get("last_keys", [])}

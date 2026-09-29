@@ -23,6 +23,7 @@ from whu_notice_research.wechat.weread import (  # noqa: E402
     WeReadAuthExpired,
     WeReadCredentials,
     WeReadMobileClient,
+    WeReadRateLimited,
     encode_web_id,
 )
 from whu_notice_research.wechat.models import WechatAccount  # noqa: E402
@@ -68,6 +69,17 @@ class WechatTests(unittest.TestCase):
 
         with self.assertRaises(WeReadAuthExpired):
             client.get_book_info("MP_WXS_1")
+
+    def test_weread_http_499_enters_rate_limit_cooldown(self) -> None:
+        client = self._weread_client()
+        client.session.get = Mock(return_value=Mock(status_code=499))
+        account = WechatAccount(
+            id="whu",
+            display_name="武汉大学",
+            book_id="MP_WXS_3092373510",
+        )
+        with self.assertRaises(WeReadRateLimited):
+            client.get_articles(account)
 
     def test_article_parser_extracts_text_links_files_and_images(self) -> None:
         source = """
