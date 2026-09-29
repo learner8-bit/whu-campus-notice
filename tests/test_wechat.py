@@ -14,6 +14,7 @@ from whu_notice_research.digest import build_digest, render_text  # noqa: E402
 from whu_notice_research.models import Notice  # noqa: E402
 from whu_notice_research.storage import NoticeStore  # noqa: E402
 from whu_notice_research.wechat.article import parse_article_html  # noqa: E402
+from whu_notice_research.wechat.collector import load_accounts  # noqa: E402
 from whu_notice_research.wechat.identity import (  # noqa: E402
     canonicalize_wechat_url,
     parse_article_biz,
@@ -38,6 +39,23 @@ from whu_notice_research.wechat.providers import (  # noqa: E402
 class WechatTests(unittest.TestCase):
     def _weread_client(self) -> WeReadMobileClient:
         return WeReadMobileClient(WeReadCredentials(vid="123", accessToken="token"))
+
+    def test_requested_wechat_accounts_are_registered(self) -> None:
+        accounts = load_accounts(ROOT / "config" / "wechat_accounts.json")
+        registered_names = {account.display_name for account in accounts}
+        requested_names = {
+            "武大青年志愿者",
+            "武大体育",
+            "武大通识教育",
+            "武汉大学",
+            "武汉大学本科生院",
+            "武汉大学电子信息学院",
+            "武汉大学全心权益",
+            "武汉大学社团中心",
+            "武汉大学图书馆",
+            "武汉大学学生会",
+        }
+        self.assertTrue(requested_names <= registered_names)
 
     def test_long_link_identity_ignores_share_tracking(self) -> None:
         first = "https://mp.weixin.qq.com/s?__biz=abc%3D%3D&mid=123&idx=2&scene=1"
