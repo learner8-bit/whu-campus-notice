@@ -85,6 +85,7 @@
       "id": "student_aid_wechat",
       "display_name": "武汉大学学生资助",
       "verified_by": "https://zzgl.whu.edu.cn/",
+      "seed_url": "https://mp.weixin.qq.com/s/n79qCfJXaPT9xCb5QCClhw",
       "rollout_rank": 5,
       "providers": [
         "weread",
@@ -95,8 +96,13 @@
       "related_web_sources": [
         "student_aid"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "biz": "Mzg3MjcyMzcwMA==",
+      "book_id": "MP_WXS_3872723700",
+      "verified_account_name": "武汉大学学生资助",
+      "enabled_after": "2026-10-05",
+      "shadow_until": "2026-10-12"
     },
     {
       "id": "youth_league_wechat",
