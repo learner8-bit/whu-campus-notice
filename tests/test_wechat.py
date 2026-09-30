@@ -153,10 +153,12 @@ class WechatTests(unittest.TestCase):
                 store.freeze_digest("2026-09-27", [notice])
                 self.assertEqual(store.frozen_digest("2026-09-27")[0].title, "报名")
 
-    def test_cross_channel_event_keeps_one_original_and_merges_sources(self) -> None:
+    def test_cross_channel_event_prefers_more_complete_website_source(self) -> None:
         website = Notice(
             "s", "通知", "2026-09-27", "竞赛通知", "https://eis.whu.edu.cn/1",
-            body_text="官网正文", site_name="电子信息学院官网",
+            body_text="官网正文包含完整的报名条件、截止时间和申请流程",
+            attachments=[{"text": "报名表", "url": "https://eis.whu.edu.cn/a.docx"}],
+            site_name="电子信息学院官网",
         )
         wechat = Notice(
             "w", "公众号文章", "2026-09-27", "竞赛通知", "https://mp.weixin.qq.com/s/1",
@@ -171,9 +173,47 @@ class WechatTests(unittest.TestCase):
         digest = build_digest("2026-09-27", [website, wechat], {})
         rendered = render_text(digest)
         self.assertEqual(digest.candidate_count, 1)
-        self.assertIn("电子信息学院官网", rendered)
-        self.assertIn("EIS青年说", rendered)
+        self.assertIn("来源：电子信息学院官网", rendered)
+        self.assertNotIn("EIS青年说", rendered)
+        self.assertIn("https://eis.whu.edu.cn/1", rendered)
         self.assertEqual(rendered.count("原文："), 1)
+
+    def test_cross_channel_event_keeps_unique_wechat_source(self) -> None:
+        wechat = Notice(
+            "w", "公众号文章", "2026-09-27", "独有志愿者招募",
+            "https://mp.weixin.qq.com/s/unique",
+            body_text="公众号独家发布的招募详情",
+            site_name="武大青年志愿者", channel="wechat",
+        )
+        wechat.ai_analysis = {
+            "schema_version": "ai_v3", "actionable": True, "audience_match": True,
+            "needs_review": False, "category": "志愿活动", "event_key": "独有志愿者招募",
+        }
+        rendered = render_text(build_digest("2026-09-27", [wechat], {}))
+        self.assertIn("来源：武大青年志愿者", rendered)
+        self.assertIn("https://mp.weixin.qq.com/s/unique", rendered)
+
+    def test_cross_channel_event_prefers_more_complete_wechat_source(self) -> None:
+        website = Notice(
+            "s", "通知", "2026-09-27", "讲座通知", "https://example.edu/short",
+            body_text="详情待定", site_name="武汉大学官网",
+        )
+        wechat = Notice(
+            "w", "公众号文章", "2026-09-27", "讲座通知",
+            "https://mp.weixin.qq.com/s/detail",
+            body_text="公众号公布了讲座时间、地点、主讲人、报名方式和座位限制" * 10,
+            site_name="青春珞珈", channel="wechat",
+        )
+        analysis = {
+            "schema_version": "ai_v3", "actionable": True, "audience_match": True,
+            "needs_review": False, "category": "讲座", "event_key": "测试讲座",
+        }
+        website.ai_analysis = dict(analysis)
+        wechat.ai_analysis = dict(analysis)
+        rendered = render_text(build_digest("2026-09-27", [website, wechat], {}))
+        self.assertIn("来源：青春珞珈", rendered)
+        self.assertNotIn("来源：武汉大学官网", rendered)
+        self.assertIn("https://mp.weixin.qq.com/s/detail", rendered)
 
     def test_shadow_account_is_stored_but_not_delivered(self) -> None:
         notice = Notice(

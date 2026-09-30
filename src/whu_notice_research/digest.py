@@ -67,22 +67,42 @@ def _dedupe_key(notice: Notice) -> str:
     return "title:" + (_title_key(notice.title) or notice.notice_id)
 
 
-def _source_preference(notice: Notice) -> tuple[int, str, int, int]:
-    """Prefer a complete official page, but let a newer update win."""
+def _content_completeness(notice: Notice) -> int:
+    """Estimate how much actionable detail the selected original contains."""
+    analysis = notice.ai_analysis
+    deadlines = analysis.get("deadlines", [])
+    materials = analysis.get("materials", [])
+    return (
+        len(notice.body_text.strip())
+        + len(notice.summary.strip())
+        + 500 * len(notice.attachments)
+        + 120 * len(notice.links)
+        + 120 * (len(deadlines) if isinstance(deadlines, list) else 0)
+        + 80 * (len(materials) if isinstance(materials, list) else 0)
+    )
+
+
+def _source_preference(notice: Notice) -> tuple[int, int, int, str]:
+    """Prefer the more complete original; use the website as the tie-breaker."""
     usable = 0 if notice.fetch_error else 1
-    official_with_files = int(notice.channel == "website" and bool(notice.attachments))
-    completeness = len(notice.body_text) + 300 * len(notice.attachments)
-    return (usable, notice.published_at, official_with_files, completeness)
+    completeness = _content_completeness(notice)
+    official_website = int(notice.channel == "website")
+    return (usable, completeness, official_website, notice.published_at)
 
 
-def _merge_source_names(preferred: Notice, other: Notice) -> None:
-    names: list[str] = []
-    for value in (preferred.site_name, other.site_name):
-        for name in value.split(" / "):
-            name = name.strip()
-            if name and name not in names:
-                names.append(name)
-    preferred.site_name = " / ".join(names)
+def _deadline_signature(notice: Notice) -> tuple[tuple[str, str], ...]:
+    return tuple(_deadline_rows(notice))
+
+
+def _prefer_newer_deadline(candidate: Notice, current: Notice) -> bool | None:
+    """Let a newer correction win only when both originals disagree on deadlines."""
+    candidate_deadlines = _deadline_signature(candidate)
+    current_deadlines = _deadline_signature(current)
+    if not candidate_deadlines or not current_deadlines or candidate_deadlines == current_deadlines:
+        return None
+    if candidate.published_at == current.published_at:
+        return None
+    return candidate.published_at > current.published_at
 
 
 def _category(notice: Notice) -> str:
@@ -227,13 +247,18 @@ def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -
             preferred[key] = (rank, notice)
             continue
         current_notice = current[1]
-        if (rank, _source_preference(notice)) > (
-            current[0], _source_preference(current_notice)
+        newer_deadline = _prefer_newer_deadline(notice, current_notice)
+        if rank > current[0] or (
+            rank == current[0]
+            and (
+                newer_deadline is True
+                or (
+                    newer_deadline is None
+                    and _source_preference(notice) > _source_preference(current_notice)
+                )
+            )
         ):
-            _merge_source_names(notice, current_notice)
             preferred[key] = (rank, notice)
-        else:
-            _merge_source_names(current_notice, notice)
     for notice in sorted(
         (value[1] for value in preferred.values()),
         key=lambda item: (item.published_at, item.title),
