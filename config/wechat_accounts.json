@@ -2,32 +2,10 @@
   "schema_version": 1,
   "accounts": [
     {
-      "id": "whu_official",
-      "display_name": "武汉大学",
-      "verified_by": "https://news.whu.edu.cn/info/1007/464137.htm",
-      "seed_url": "https://mp.weixin.qq.com/s/xkutE0tHrMBFgGCSwWHSSg",
-      "rollout_rank": 1,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "whu_main"
-      ],
-      "enabled": true,
-      "verified": true,
-      "biz": "MzA5MjM3MzUxMA==",
-      "book_id": "MP_WXS_3092373510",
-      "verified_account_name": "武汉大学",
-      "enabled_after": "2026-09-28",
-      "shadow_until": "2026-09-28"
-    },
-    {
       "id": "eis_youth",
       "display_name": "EIS青年说",
       "verified_by": "https://eis.whu.edu.cn/",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MzU4NDgzOTExNA%3D%3D&mid=2247487157&idx=1",
       "rollout_rank": 2,
       "providers": [
         "weread",
@@ -38,8 +16,13 @@
       "related_web_sources": [
         "eis"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "biz": "MzU4NDgzOTExNA==",
+      "book_id": "MP_WXS_3584839114",
+      "verified_account_name": "EIS青年说",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "undergraduate_school_wechat",
@@ -61,29 +44,6 @@
       "biz": "Mzk0MzM4Nzc0OA==",
       "book_id": "MP_WXS_3943387748",
       "verified_account_name": "武汉大学本科生院",
-      "enabled_after": "2026-09-28",
-      "shadow_until": "2026-09-28"
-    },
-    {
-      "id": "student_aid_wechat",
-      "display_name": "武汉大学学生资助",
-      "verified_by": "https://zzgl.whu.edu.cn/",
-      "seed_url": "https://mp.weixin.qq.com/s/n79qCfJXaPT9xCb5QCClhw",
-      "rollout_rank": 5,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "student_aid"
-      ],
-      "enabled": true,
-      "verified": true,
-      "biz": "Mzg3MjcyMzcwMA==",
-      "book_id": "MP_WXS_3872723700",
-      "verified_account_name": "武汉大学学生资助",
       "enabled_after": "2026-09-28",
       "shadow_until": "2026-09-28"
     },
@@ -114,6 +74,7 @@
       "id": "student_union_wechat",
       "display_name": "武汉大学学生会",
       "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MzA3MTc1NTIyNA%3D%3D&mid=2650792290&idx=1",
       "rollout_rank": 8,
       "providers": [
         "weread",
@@ -126,6 +87,8 @@
       ],
       "enabled": true,
       "verified": true,
+      "biz": "MzA3MTc1NTIyNA==",
+      "book_id": "MP_WXS_3071755224",
       "verified_account_name": "武汉大学学生会",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
@@ -134,6 +97,7 @@
       "id": "young_volunteers_wechat",
       "display_name": "武大青年志愿者",
       "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MjM5NDQ5NTk2NA%3D%3D&mid=2650750739&idx=2",
       "rollout_rank": 9,
       "providers": [
         "weread",
@@ -146,14 +110,16 @@
       ],
       "enabled": true,
       "verified": true,
+      "biz": "MjM5NDQ5NTk2NA==",
+      "book_id": "MP_WXS_2394495964",
       "verified_account_name": "武大青年志愿者",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
     },
     {
       "id": "whu_sports_wechat",
-      "display_name": "武大体育",
-      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "display_name": "珞珈体育",
+      "verified_by": "https://sports.whu.edu.cn/",
       "rollout_rank": 10,
       "providers": [
         "weread",
@@ -164,29 +130,9 @@
       "related_web_sources": [
         "whu_main"
       ],
-      "enabled": true,
+      "enabled": false,
       "verified": true,
-      "verified_account_name": "武大体育",
-      "enabled_after": "2026-09-30",
-      "shadow_until": "2026-09-30"
-    },
-    {
-      "id": "general_education_wechat",
-      "display_name": "武大通识教育",
-      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
-      "rollout_rank": 11,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "undergraduate_school"
-      ],
-      "enabled": true,
-      "verified": true,
-      "verified_account_name": "武大通识教育",
+      "verified_account_name": "珞珈体育",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
     },
@@ -194,6 +140,7 @@
       "id": "eis_official_wechat",
       "display_name": "武汉大学电子信息学院",
       "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=Mzg5NTgwOTczNg%3D%3D&mid=2247483935&idx=1",
       "rollout_rank": 12,
       "providers": [
         "weread",
@@ -206,6 +153,8 @@
       ],
       "enabled": true,
       "verified": true,
+      "biz": "Mzg5NTgwOTczNg==",
+      "book_id": "MP_WXS_3895809736",
       "verified_account_name": "武汉大学电子信息学院",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
@@ -214,6 +163,7 @@
       "id": "student_rights_wechat",
       "display_name": "武汉大学全心权益",
       "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MjM5OTA0MDgwMA%3D%3D&mid=2704390518&idx=1",
       "rollout_rank": 13,
       "providers": [
         "weread",
@@ -226,6 +176,8 @@
       ],
       "enabled": true,
       "verified": true,
+      "biz": "MjM5OTA0MDgwMA==",
+      "book_id": "MP_WXS_2399040800",
       "verified_account_name": "武汉大学全心权益",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
@@ -234,6 +186,7 @@
       "id": "student_clubs_wechat",
       "display_name": "武汉大学社团中心",
       "verified_by": "user_followed_accounts_screenshot_2026-09-29",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MzIyNzAxNzk1OQ%3D%3D&mid=2651243060&idx=1",
       "rollout_rank": 14,
       "providers": [
         "weread",
@@ -246,6 +199,8 @@
       ],
       "enabled": true,
       "verified": true,
+      "biz": "MzIyNzAxNzk1OQ==",
+      "book_id": "MP_WXS_3227017959",
       "verified_account_name": "武汉大学社团中心",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"

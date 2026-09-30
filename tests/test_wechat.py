@@ -45,9 +45,7 @@ class WechatTests(unittest.TestCase):
         registered_names = {account.display_name for account in accounts}
         requested_names = {
             "武大青年志愿者",
-            "武大体育",
-            "武大通识教育",
-            "武汉大学",
+            "珞珈体育",
             "武汉大学本科生院",
             "武汉大学电子信息学院",
             "武汉大学全心权益",
@@ -55,7 +53,22 @@ class WechatTests(unittest.TestCase):
             "武汉大学学生会",
         }
         self.assertTrue(requested_names <= registered_names)
-        self.assertNotIn("武汉大学图书馆", registered_names)
+        removed_names = {
+            "武汉大学",
+            "武大通识教育",
+            "武汉大学学生资助",
+            "武汉大学图书馆",
+        }
+        self.assertTrue(removed_names.isdisjoint(registered_names))
+
+    def test_every_enabled_wechat_account_has_a_unique_identity(self) -> None:
+        accounts = load_accounts(ROOT / "config" / "wechat_accounts.json")
+        incomplete = [
+            account.display_name
+            for account in accounts
+            if account.enabled and (not account.biz or not account.book_id)
+        ]
+        self.assertEqual(incomplete, [])
 
     def test_long_link_identity_ignores_share_tracking(self) -> None:
         first = "https://mp.weixin.qq.com/s?__biz=abc%3D%3D&mid=123&idx=2&scene=1"
@@ -202,6 +215,19 @@ class WechatTests(unittest.TestCase):
         self.assertEqual(
             resolved,
             "https://mp.weixin.qq.com/s?__biz=MzA5MjM3MzUxMA%3D%3D&mid=123&idx=1",
+        )
+
+    def test_sogou_does_not_corrupt_timestamp_query_parameter(self) -> None:
+        source = """
+        <script>
+        var url = 'https://mp.weixin.qq.com';
+        url += '/s?src=11&timestamp=1790756560&ver=6997&signature=token';
+        </script>
+        """
+        resolved = SogouProvider._redirect_from_script(source)
+        self.assertEqual(
+            resolved,
+            "https://mp.weixin.qq.com/s?src=11&timestamp=1790756560&ver=6997&signature=token",
         )
 
     def test_sogou_keeps_only_exact_publisher_rows(self) -> None:

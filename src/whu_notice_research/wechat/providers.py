@@ -392,7 +392,16 @@ class SogouProvider(WechatDiscoveryProvider):
 
     @staticmethod
     def _decode_js_string(value: str) -> str:
-        value = html_lib.unescape(value).replace(r"\/", "/")
+        # ``html.unescape`` treats the prefix of ``&timestamp`` as the legacy
+        # entity ``&times`` and corrupts it into ``×tamp``.  Decode only the
+        # ampersand entities that can legitimately occur in an article URL.
+        value = (
+            value.replace("&amp;", "&")
+            .replace("&#38;", "&")
+            .replace("&#x26;", "&")
+            .replace("&#X26;", "&")
+            .replace(r"\/", "/")
+        )
         replacements = {
             r"\x26": "&",
             r"\u0026": "&",
