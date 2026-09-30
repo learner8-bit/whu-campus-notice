@@ -52,10 +52,10 @@ class WechatTests(unittest.TestCase):
             "武汉大学电子信息学院",
             "武汉大学全心权益",
             "武汉大学社团中心",
-            "武汉大学图书馆",
             "武汉大学学生会",
         }
         self.assertTrue(requested_names <= registered_names)
+        self.assertNotIn("武汉大学图书馆", registered_names)
 
     def test_long_link_identity_ignores_share_tracking(self) -> None:
         first = "https://mp.weixin.qq.com/s?__biz=abc%3D%3D&mid=123&idx=2&scene=1"

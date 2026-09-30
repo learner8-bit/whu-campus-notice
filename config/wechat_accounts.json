@@ -147,7 +147,7 @@
     {
       "id": "student_union_wechat",
       "display_name": "武汉大学学生会",
-      "verified_by": "https://future.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 8,
       "providers": [
         "weread",
@@ -158,13 +158,16 @@
       "related_web_sources": [
         "youth_league"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武汉大学学生会",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "young_volunteers_wechat",
       "display_name": "武大青年志愿者",
-      "verified_by": "https://future.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 9,
       "providers": [
         "weread",
@@ -175,13 +178,16 @@
       "related_web_sources": [
         "youth_league"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武大青年志愿者",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "whu_sports_wechat",
       "display_name": "武大体育",
-      "verified_by": "https://www.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 10,
       "providers": [
         "weread",
@@ -192,13 +198,16 @@
       "related_web_sources": [
         "whu_main"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武大体育",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "general_education_wechat",
       "display_name": "武大通识教育",
-      "verified_by": "https://uc.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 11,
       "providers": [
         "weread",
@@ -209,13 +218,16 @@
       "related_web_sources": [
         "undergraduate_school"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武大通识教育",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "eis_official_wechat",
       "display_name": "武汉大学电子信息学院",
-      "verified_by": "https://eis.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 12,
       "providers": [
         "weread",
@@ -226,13 +238,16 @@
       "related_web_sources": [
         "eis"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武汉大学电子信息学院",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "student_rights_wechat",
       "display_name": "武汉大学全心权益",
-      "verified_by": "https://future.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 13,
       "providers": [
         "weread",
@@ -243,13 +258,16 @@
       "related_web_sources": [
         "youth_league"
       ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武汉大学全心权益",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     },
     {
       "id": "student_clubs_wechat",
       "display_name": "武汉大学社团中心",
-      "verified_by": "https://future.whu.edu.cn/",
+      "verified_by": "user_followed_accounts_screenshot_2026-09-29",
       "rollout_rank": 14,
       "providers": [
         "weread",
@@ -260,25 +278,11 @@
       "related_web_sources": [
         "youth_league"
       ],
-      "enabled": false,
-      "verified": false
-    },
-    {
-      "id": "library_wechat",
-      "display_name": "武汉大学图书馆",
-      "verified_by": "https://www.lib.whu.edu.cn/",
-      "rollout_rank": 15,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "whu_main"
-      ],
-      "enabled": false,
-      "verified": false
+      "enabled": true,
+      "verified": true,
+      "verified_account_name": "武汉大学社团中心",
+      "enabled_after": "2026-09-30",
+      "shadow_until": "2026-09-30"
     }
   ]
 }
