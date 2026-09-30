@@ -65,23 +65,6 @@
       "shadow_until": "2026-09-28"
     },
     {
-      "id": "student_affairs_wechat",
-      "display_name": "武汉大学学生工作部",
-      "verified_by": "https://xgb.whu.edu.cn/",
-      "rollout_rank": 7,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "whu_main"
-      ],
-      "enabled": false,
-      "verified": false
-    },
-    {
       "id": "student_aid_wechat",
       "display_name": "武汉大学学生资助",
       "verified_by": "https://zzgl.whu.edu.cn/",
@@ -126,23 +109,6 @@
       "verified_account_name": "青春珞珈",
       "enabled_after": "2026-09-28",
       "shadow_until": "2026-09-28"
-    },
-    {
-      "id": "international_office_wechat",
-      "display_name": "武汉大学国际交流部",
-      "verified_by": "https://oir.whu.edu.cn/",
-      "rollout_rank": 6,
-      "providers": [
-        "weread",
-        "message_album",
-        "sogou",
-        "website_mirror"
-      ],
-      "related_web_sources": [
-        "international_office"
-      ],
-      "enabled": false,
-      "verified": false
     },
     {
       "id": "student_union_wechat",
