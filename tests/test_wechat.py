@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,6 +33,7 @@ from whu_notice_research.wechat.providers import (  # noqa: E402
     MessageAlbumProvider,
     SogouProvider,
     WeReadProvider,
+    WeReadWebProvider,
     _articles_from_weread_web,
 )
 
@@ -357,6 +359,55 @@ class WechatTests(unittest.TestCase):
         self.assertEqual(articles[0].title, "竞赛报名通知")
         self.assertEqual(articles[0].url, "https://mp.weixin.qq.com/s/article-token")
         self.assertEqual(articles[0].provider, "weread_web")
+
+    def test_weread_web_provider_reads_latest_cover(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            state.write_text(
+                json.dumps(
+                    {
+                        "cookies": [
+                            {
+                                "name": "wr_skey",
+                                "value": "saved-session",
+                                "domain": ".weread.qq.com",
+                                "path": "/",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = WeReadWebProvider(state)
+            response = Mock(status_code=200)
+            response.json.return_value = {
+                "name": "武汉大学本科生院",
+                "title": "竞赛报名通知",
+                "reviewId": "MP_WXS_3943387748_article~token",
+                "digest": "报名摘要",
+            }
+            response.raise_for_status = Mock()
+            article_response = Mock(status_code=200)
+            article_response.text = "createTime = '2026-09-30 10:00';"
+            article_response.raise_for_status = Mock()
+            provider.session.get = Mock(side_effect=[response, article_response])
+            result = provider.sync(
+                WechatAccount(
+                    id="undergraduate_school_wechat",
+                    display_name="武汉大学本科生院",
+                    book_id="MP_WXS_3943387748",
+                ),
+                {},
+            )
+            provider.close()
+        self.assertEqual(result.status, "healthy")
+        self.assertEqual(len(result.articles), 1)
+        self.assertEqual(result.articles[0].title, "竞赛报名通知")
+        self.assertEqual(
+            result.articles[0].url,
+            "https://mp.weixin.qq.com/s/article_token",
+        )
+        self.assertEqual(result.articles[0].published_at, "2026-09-30")
 
     def test_weread_web_id_encoder_matches_known_example(self) -> None:
         self.assertEqual(encode_web_id("43208843"), "c9c321c07293508bc9c79df")

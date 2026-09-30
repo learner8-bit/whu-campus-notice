@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import html as html_lib
-import os
+import json
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote, urljoin
 from zoneinfo import ZoneInfo
 
@@ -20,7 +21,6 @@ from .weread import (
     WeReadMobileClient,
     WeReadRateLimited,
     datetime_from_timestamp,
-    encode_web_id,
 )
 
 
@@ -164,45 +164,81 @@ def _articles_from_weread_web(
 
 
 class WeReadWebProvider(WechatDiscoveryProvider):
-    """Use the official WeRead web app to generate its dynamic request proof."""
+    """Read the latest article through a normal saved WeRead browser session.
+
+    WeRead's current MP reader uses ``/api/mp/cover`` for the newest article.
+    Loading the exact cookies saved by Playwright keeps this on the normal web
+    login path and avoids trying to manufacture or transform credentials.
+    """
 
     name = "weread_web"
 
     def __init__(self, state_path, *, timeout_ms: int = 35_000):
         self.state_path = str(state_path)
         self.timeout_ms = timeout_ms
-        self._playwright = None
-        self._browser = None
-        self._context = None
-
-    def _ensure_context(self):
-        if self._context is not None:
-            return self._context
-        from playwright.sync_api import sync_playwright
-
-        self._playwright = sync_playwright().start()
-        executable = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", "").strip()
-        launch_options = {
-            "headless": True,
-            "args": ["--no-sandbox", "--disable-dev-shm-usage"],
-        }
-        if executable:
-            launch_options["executable_path"] = executable
-        self._browser = self._playwright.chromium.launch(**launch_options)
-        self._context = self._browser.new_context(storage_state=self.state_path)
-        return self._context
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                **BROWSER_HEADERS,
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://weread.qq.com",
+                "Referer": "https://weread.qq.com/",
+            }
+        )
+        payload = json.loads(Path(self.state_path).read_text(encoding="utf-8"))
+        for cookie in payload.get("cookies", []):
+            domain = str(cookie.get("domain") or "")
+            if not domain.endswith("weread.qq.com"):
+                continue
+            name = str(cookie.get("name") or "")
+            value = str(cookie.get("value") or "")
+            if name and value:
+                self.session.cookies.set(name, value, domain=domain, path=str(cookie.get("path") or "/"))
 
     def close(self) -> None:
-        if self._context is not None:
-            self._context.storage_state(path=self.state_path)
-            self._context.close()
-            self._context = None
-        if self._browser is not None:
-            self._browser.close()
-            self._browser = None
-        if self._playwright is not None:
-            self._playwright.stop()
-            self._playwright = None
+        self.session.close()
+
+    @staticmethod
+    def _article_url(review_id: str, book_id: str) -> str:
+        prefix = f"{book_id}_"
+        token = review_id[len(prefix):] if review_id.startswith(prefix) else ""
+        if not token:
+            return ""
+        return "https://mp.weixin.qq.com/s/" + quote(token.replace("~", "_"), safe="")
+
+    @staticmethod
+    def _published_at(payload: dict) -> str:
+        for key in ("publishTime", "createTime", "updateTime", "time", "timestamp"):
+            try:
+                value = int(payload.get(key) or 0)
+            except (TypeError, ValueError):
+                continue
+            if value > 10_000_000_000:
+                value //= 1000
+            if value > 0:
+                return datetime_from_timestamp(value)
+        return ""
+
+    def _published_at_from_article(self, url: str) -> str:
+        """Read the public article timestamp when the cover API omits it."""
+        response = self.session.get(
+            url,
+            headers={"Referer": "https://mp.weixin.qq.com/"},
+            timeout=max(self.timeout_ms / 1000, 10),
+        )
+        response.raise_for_status()
+        source = response.text
+        timestamp = re.search(r"\bvar\s+ct\s*=\s*[\"'](\d{10,13})[\"']", source)
+        if timestamp:
+            value = int(timestamp.group(1))
+            if value > 10_000_000_000:
+                value //= 1000
+            return datetime.fromtimestamp(value, SHANGHAI).date().isoformat()
+        readable = re.search(
+            r"\bcreateTime\s*=\s*[\"'](20\d{2}-\d{1,2}-\d{1,2})",
+            source,
+        )
+        return readable.group(1) if readable else ""
 
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
         today = datetime.now(SHANGHAI).date().isoformat()
@@ -217,21 +253,20 @@ class WeReadWebProvider(WechatDiscoveryProvider):
         if not account.book_id:
             return ProviderResult(self.name, status="unavailable", error="缺少 book_id")
         try:
-            context = self._ensure_context()
-            page = context.new_page()
-            try:
-                with page.expect_response(
-                    lambda response: "/web/mp/articles" in response.url,
-                    timeout=self.timeout_ms,
-                ) as response_info:
-                    page.goto(
-                        f"https://weread.qq.com/web/mp/reader/{encode_web_id(account.book_id)}",
-                        wait_until="domcontentloaded",
-                        timeout=self.timeout_ms,
-                    )
-                payload = response_info.value.json()
-            finally:
-                page.close()
+            response = self.session.get(
+                "https://weread.qq.com/api/mp/cover",
+                params={"bookId": account.book_id},
+                timeout=max(self.timeout_ms / 1000, 10),
+            )
+            if response.status_code in {401, 403}:
+                return ProviderResult(
+                    self.name,
+                    status="auth_expired",
+                    error="微信读书网页授权已失效，需要重新扫码",
+                    cursor={"queried_on": today, "last_status": "auth_expired", "last_error": "网页授权失效"},
+                )
+            response.raise_for_status()
+            payload = response.json()
             if not isinstance(payload, dict):
                 raise RuntimeError("微信读书网页端返回格式异常")
             code = int(payload.get("errCode", payload.get("errcode", 0)) or 0)
@@ -242,22 +277,42 @@ class WeReadWebProvider(WechatDiscoveryProvider):
                 status = "rate_limited" if code == -2041 else "unavailable"
                 error = f"微信读书网页端错误 {code}"
             else:
-                articles = _articles_from_weread_web(payload, account, self.name)
+                review_id = str(payload.get("reviewId") or "").strip()
+                title = str(payload.get("title") or "").strip()
+                url = self._article_url(review_id, account.book_id)
+                if not review_id or not title or not url:
+                    raise RuntimeError("新版接口未返回可识别的最新文章")
+                published_at = self._published_at(payload)
+                if not published_at:
+                    published_at = self._published_at_from_article(url)
+                article = WechatArticle(
+                    account.id,
+                    account.display_name,
+                    title,
+                    url,
+                    published_at=published_at,
+                    summary=str(payload.get("digest") or ""),
+                    article_key=wechat_article_key(
+                        url,
+                        publisher_id=account.id,
+                        title=title,
+                        published_at=published_at,
+                        upstream_id=review_id,
+                    ),
+                    provider=self.name,
+                    raw={"review_id": review_id, "book_id": account.book_id},
+                )
                 previous = {str(item) for item in cursor.get("last_keys", [])}
-                unseen = [item for item in articles if item.article_key not in previous]
-                keys = list(dict.fromkeys([item.article_key for item in articles] + list(previous)))[:200]
-                status = "healthy" if articles else "degraded"
-                error = "" if articles else "网页会话成功，但未解析到文章"
+                unseen = [] if article.article_key in previous else [article]
+                keys = list(dict.fromkeys([article.article_key] + list(previous)))[:200]
                 return ProviderResult(
                     self.name,
                     articles=unseen,
-                    status=status,
-                    error=error,
                     cursor={
                         "queried_on": today,
                         "last_keys": keys,
-                        "last_status": status,
-                        "last_error": error,
+                        "last_status": "healthy",
+                        "last_error": "",
                     },
                 )
             return ProviderResult(
@@ -267,12 +322,8 @@ class WeReadWebProvider(WechatDiscoveryProvider):
                 cursor={"queried_on": today, "last_status": status, "last_error": error},
             )
         except Exception as exc:
-            status = "auth_expired" if "Timeout" in type(exc).__name__ else "unavailable"
-            error = (
-                "未捕获到文章列表；网页授权可能已失效"
-                if status == "auth_expired"
-                else f"{type(exc).__name__}: {str(exc)[:180]}"
-            )
+            status = "unavailable"
+            error = f"{type(exc).__name__}: {str(exc)[:180]}"
             return ProviderResult(
                 self.name,
                 status=status,

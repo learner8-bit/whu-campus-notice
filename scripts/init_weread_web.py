@@ -71,7 +71,10 @@ def main() -> int:
         page = context.new_page()
 
         def remember(response) -> None:
-            if "/web/mp/articles" not in response.url:
+            if not any(
+                marker in response.url
+                for marker in ("/web/mp/articles", "/api/mp/cover")
+            ):
                 return
             try:
                 value = response.json()
@@ -79,6 +82,7 @@ def main() -> int:
                 return
             if isinstance(value, dict) and (
                 isinstance(value.get("reviews"), list)
+                or bool(value.get("reviewId"))
                 or int(value.get("errCode", value.get("errcode", 0)) or 0) == 0
             ):
                 captured.update(value)
@@ -88,18 +92,22 @@ def main() -> int:
             "https://weread.qq.com/web/mp/reader/"
             + encode_web_id(str(account["book_id"]))
         )
-        page.goto("https://weread.qq.com/", wait_until="domcontentloaded", timeout=60_000)
+        page.goto("https://weread.qq.com/", wait_until="networkidle", timeout=60_000)
         initial_cookies = {item["name"]: item["value"] for item in context.cookies()}
         already_logged_in = any(
             initial_cookies.get(name) for name in ("wr_vid", "wr_skey", "wr_rt")
         )
         if not already_logged_in:
+            # The login link is server-rendered before its click handler is
+            # hydrated. Waiting briefly avoids a visually successful click
+            # that never opens the QR dialog.
+            page.wait_for_timeout(1500)
             try:
                 page.get_by_text("登录", exact=True).click(timeout=15_000)
             except Exception:
                 # The login control can be rendered as an icon in some layouts.
                 page.locator("[class*='login'], [data-testid*='login']").first.click(timeout=5_000)
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(3000)
             login_page = context.pages[-1]
             login_screenshot = args.state.with_name("weread_web_login.png")
             login_page.screenshot(path=str(login_screenshot), full_page=False)
@@ -133,6 +141,18 @@ def main() -> int:
                 str(account["book_id"]),
             )
             page.goto(reader_url, wait_until="domcontentloaded", timeout=60_000)
+            if not captured:
+                value = page.evaluate(
+                    """async (bookId) => {
+                        const response = await fetch('/api/mp/cover?bookId=' + encodeURIComponent(bookId), {
+                            credentials: 'include'
+                        });
+                        return await response.json();
+                    }""",
+                    str(account["book_id"]),
+                )
+                if isinstance(value, dict):
+                    captured.update(value)
             list_deadline = deadline
             while time.time() < list_deadline and not captured:
                 page.wait_for_timeout(1000)
