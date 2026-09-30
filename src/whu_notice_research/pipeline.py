@@ -11,6 +11,7 @@ from .rules_v1 import RULESET_VERSION, decide
 from .sites import WebsiteSourceAdapter
 from .storage import NoticeStore, SyncResult
 from .wechat.collector import WechatSourceAdapter
+from .wechat.models import ProviderResult, WechatAccount
 
 
 @dataclass
@@ -20,6 +21,7 @@ class PipelineResult:
     fetched_count: int
     known_before: int
     degraded_sources: list[str] | None = None
+    provider_results: list[tuple[WechatAccount, ProviderResult]] | None = None
 
 
 def run_incremental(
@@ -35,6 +37,7 @@ def run_incremental(
         run_id = store.start_run(site_id, "incremental" if known else "bootstrap")
         try:
             degraded_sources: list[str] = []
+            provider_results: list[tuple[WechatAccount, ProviderResult]] = []
             if site_id == "wechat":
                 collection = WechatSourceAdapter(
                     project_root=project_root,
@@ -43,6 +46,7 @@ def run_incremental(
                 ).collect({"days": 30 if not known else days})
                 notices = collection.notices
                 degraded_sources = collection.degraded_accounts
+                provider_results = collection.provider_results
             else:
                 notices = WebsiteSourceAdapter(
                     site_id, days=days, project_root=project_root
@@ -81,6 +85,7 @@ def run_incremental(
                 len(notices),
                 len(known),
                 degraded_sources,
+                provider_results,
             )
         except Exception as exc:
             empty = SyncResult()

@@ -28,6 +28,14 @@ def main() -> int:
         f"wechat: fetched={result.fetched_count} new={len(result.sync.new)} "
         f"updated={len(result.sync.updated)} degraded={len(result.degraded_sources or [])}"
     )
+    for account, provider in result.provider_results or []:
+        detail = f" error={provider.error}" if provider.error else ""
+        print(
+            f"wechat provider: account={account.display_name} "
+            f"provider={provider.provider} status={provider.status} "
+            f"attempted={str(provider.attempted).lower()} "
+            f"articles={len(provider.articles)}{detail}"
+        )
     if result.degraded_sources:
         for source in result.degraded_sources:
             print(f"wechat degraded: {source}")
