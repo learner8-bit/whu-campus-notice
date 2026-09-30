@@ -22,7 +22,7 @@
       "book_id": "MP_WXS_3092373510",
       "verified_account_name": "武汉大学",
       "enabled_after": "2026-09-28",
-      "shadow_until": "2026-10-05"
+      "shadow_until": "2026-09-28"
     },
     {
       "id": "eis_youth",
@@ -62,7 +62,7 @@
       "book_id": "MP_WXS_3943387748",
       "verified_account_name": "武汉大学本科生院",
       "enabled_after": "2026-09-28",
-      "shadow_until": "2026-10-05"
+      "shadow_until": "2026-09-28"
     },
     {
       "id": "student_affairs_wechat",
@@ -101,8 +101,8 @@
       "biz": "Mzg3MjcyMzcwMA==",
       "book_id": "MP_WXS_3872723700",
       "verified_account_name": "武汉大学学生资助",
-      "enabled_after": "2026-10-05",
-      "shadow_until": "2026-10-12"
+      "enabled_after": "2026-09-28",
+      "shadow_until": "2026-09-28"
     },
     {
       "id": "youth_league_wechat",
@@ -125,7 +125,7 @@
       "book_id": "MP_WXS_3014125746",
       "verified_account_name": "青春珞珈",
       "enabled_after": "2026-09-28",
-      "shadow_until": "2026-10-05"
+      "shadow_until": "2026-09-28"
     },
     {
       "id": "international_office_wechat",
