@@ -45,6 +45,9 @@ class WeReadProvider(WechatDiscoveryProvider):
     def __init__(self, credentials: WeReadCredentials, *, persist_credentials):
         self.credentials = credentials
         self.persist_credentials = persist_credentials
+        # Reuse one client across accounts so the upstream two-second request
+        # interval applies globally within a collection run.
+        self.client = WeReadMobileClient(credentials)
 
     @staticmethod
     def _cooldown(cursor: dict, exc: Exception) -> ProviderResult:
@@ -67,14 +70,15 @@ class WeReadProvider(WechatDiscoveryProvider):
                 attempted=False,
             )
         try:
-            articles = WeReadMobileClient(self.credentials).get_articles(
+            articles = self.client.get_articles(
                 account, count=30, synckey=int(cursor.get("synckey") or 0)
             )
         except WeReadAuthExpired:
             try:
                 self.credentials = WeReadAuthClient().refresh(self.credentials)
                 self.persist_credentials(self.credentials)
-                articles = WeReadMobileClient(self.credentials).get_articles(account, count=30)
+                self.client = WeReadMobileClient(self.credentials)
+                articles = self.client.get_articles(account, count=30)
             except WeReadAuthExpired as exc:
                 return ProviderResult(self.name, status="auth_expired", error=str(exc))
             except WeReadRateLimited as exc:

@@ -37,7 +37,12 @@ VERSION_HEADERS = {
     "basever": "2.1.2.10245900",
     "osver": "11",
     "channelId": "900",
-    "User-Agent": "WeRead/2.1.2 WRBrand/Onyx wr_eink Dalvik/2.1.0 (Linux; Android 11)",
+    "User-Agent": (
+        "WeRead/2.1.2 WRBrand/Onyx wr_eink Dalvik/2.1.0 "
+        "(Linux; U; Android 11; BOOX Build/onyx)"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9",
 }
 
 
@@ -305,16 +310,32 @@ def _check_error(payload: dict[str, Any]) -> None:
 
 
 class WeReadMobileClient:
-    def __init__(self, credentials: WeReadCredentials, *, timeout: float = 20.0):
+    def __init__(
+        self,
+        credentials: WeReadCredentials,
+        *,
+        timeout: float = 20.0,
+        min_interval: float = 2.0,
+    ):
         credentials.validate()
         self.timeout = timeout
+        self.min_interval = max(float(min_interval), 0.0)
+        self._last_request = 0.0
         self.session = requests.Session()
         self.session.headers.update(
             {**VERSION_HEADERS, "vid": credentials.vid, "accessToken": credentials.accessToken}
         )
 
+    def _wait_for_rate_limit(self) -> None:
+        if self._last_request:
+            remaining = self.min_interval - (time.monotonic() - self._last_request)
+            if remaining > 0:
+                time.sleep(remaining)
+        self._last_request = time.monotonic()
+
     def get_book_info(self, book_id: str) -> dict[str, Any]:
         """Return public metadata for a WeRead book/public-account identifier."""
+        self._wait_for_rate_limit()
         response = self.session.get(
             f"{WEREAD_BASE}/book/info",
             params={"bookId": str(book_id).strip()},
@@ -335,6 +356,7 @@ class WeReadMobileClient:
         book_id = account.book_id or (book_id_from_biz(account.biz) if account.biz else "")
         if not book_id:
             raise WeReadError(f"{account.display_name} 缺少 book_id/biz")
+        self._wait_for_rate_limit()
         response = self.session.get(
             f"{WEREAD_BASE}/mp/chapters",
             params={"bookId": book_id, "count": min(max(count, 1), 50), "synckey": max(synckey, 0)},
