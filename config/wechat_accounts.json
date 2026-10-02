@@ -204,6 +204,29 @@
       "verified_account_name": "武汉大学社团中心",
       "enabled_after": "2026-09-30",
       "shadow_until": "2026-09-30"
+    },
+    {
+      "id": "youth_development_wechat",
+      "display_name": "武大青发",
+      "verified_by": "https://oldwww.lib.whu.edu.cn/webfile/category/more_stu_org/633.html",
+      "seed_url": "https://mp.weixin.qq.com/s?__biz=MzkzMzcxODI3MA%3D%3D&mid=2247517767&idx=1",
+      "rollout_rank": 15,
+      "providers": [
+        "weread_web",
+        "message_album",
+        "sogou",
+        "website_mirror"
+      ],
+      "related_web_sources": [
+        "youth_league"
+      ],
+      "enabled": true,
+      "verified": true,
+      "biz": "MzkzMzcxODI3MA==",
+      "book_id": "MP_WXS_3933718270",
+      "verified_account_name": "武大青发",
+      "enabled_after": "2026-10-02",
+      "shadow_until": "2026-10-02"
     }
   ]
 }
