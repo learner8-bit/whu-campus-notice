@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from .storage import NoticeStore
 
 
-PROMPT_VERSION = "ai_v3"
+PROMPT_VERSION = "ai_v4"
 MAX_INPUT_CHARS = 28_000
 ALLOWED_CATEGORIES = set(CATEGORY_ORDER)
 
@@ -161,7 +161,12 @@ deadlines 只填原文明确出现的报名、申请、材料提交、作品提�
 发布日期、活动举行时间当截止时间。每项必须拆成 label 和 time；label 要说清楚动作，
 例如“报名截止”“材料提交截止”“巴黎政治学院申请截止”，不能只写“截止”。
 materials 只列申请者需要准备或提交的材料，不要混入网页提供下载的附件文件名，不放 URL。
-event_key 用“年份+正式活动/项目名称+批次”生成稳定短语，用于合并不同官网的同一事项。
+event_key 用“年份+正式活动/项目名称+批次”生成稳定短语，只表示所属活动本身。
+action_stage 概括这篇通知要求用户采取的当前行动阶段，例如“榜题征集”“参赛报名”
+“材料补交”“截止延期”“结果公示”。同一活动的不同阶段必须使用不同值。
+dedupe_key 由你根据全文语义生成，只让“同一事项、同一行动阶段、同一批次、关键截止
+信息一致”的官网和公众号内容共享同一个值。不得仅凭标题词汇相似就判重；行动阶段、
+批次、适用对象、报名要求或截止时间发生实质变化时，必须生成不同的 dedupe_key。
 value 只写原文明示的价值，或下方已核验政策能严格推出的综测/保研/奖励分值。
 没有明确依据时 value 必须为空，不得凭常识猜测。若依据仅适用于2026届推免，而目标
 用户为2025级，必须写成“按2026届政策参考……，本届规则待发布”，不能当作确定分值。
@@ -188,6 +193,8 @@ needs_review=true，不得根据标题补写正文没有提供的事实。
   "materials": [],
   "summary": "",
   "event_key": "",
+  "action_stage": "",
+  "dedupe_key": "",
   "policy_basis": ""
 }}"""
 
@@ -251,6 +258,8 @@ def normalize_analysis(raw: dict) -> dict:
         "materials": materials[:10],
         "summary": _short_text(raw.get("summary"), 180),
         "event_key": _short_text(raw.get("event_key"), 120),
+        "action_stage": _short_text(raw.get("action_stage"), 60),
+        "dedupe_key": _short_text(raw.get("dedupe_key"), 180),
         "policy_basis": policy_basis,
     }
 

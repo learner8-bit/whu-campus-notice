@@ -242,11 +242,14 @@ class WeReadWebProvider(WechatDiscoveryProvider):
 
     def sync(self, account: WechatAccount, cursor: dict) -> ProviderResult:
         today = datetime.now(SHANGHAI).date().isoformat()
-        if cursor.get("queried_on") == today:
+        if (
+            cursor.get("queried_on") == today
+            and str(cursor.get("last_status") or "") == "healthy"
+        ):
             return ProviderResult(
                 self.name,
-                status=str(cursor.get("last_status") or "degraded"),
-                error=str(cursor.get("last_error") or "当天已完成网页会话采集"),
+                status="healthy",
+                error="",
                 cursor=cursor,
                 attempted=False,
             )

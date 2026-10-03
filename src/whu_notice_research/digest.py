@@ -58,13 +58,17 @@ def _effective_label(notice: Notice, day: str = "") -> str:
 
 
 def _dedupe_key(notice: Notice) -> str:
-    event_key = str(notice.ai_analysis.get("event_key") or "")
-    category = str(notice.ai_analysis.get("category") or "")
-    if event_key:
-        normalized = _title_key(category + event_key)
+    """Use DeepSeek's semantic decision; otherwise merge exact records only."""
+    analysis = notice.ai_analysis
+    semantic_key = str(analysis.get("dedupe_key") or "")
+    category = str(analysis.get("category") or "")
+    if analysis.get("schema_version") and semantic_key:
+        normalized = _title_key(category + semantic_key)
         if normalized:
-            return "event:" + normalized
-    return "title:" + (_title_key(notice.title) or notice.notice_id)
+            return "ai:" + normalized
+    # Without a current AI decision, do not guess from similar title words.
+    # The notice ID is already a stable exact-source identity.
+    return "exact:" + notice.notice_id
 
 
 def _content_completeness(notice: Notice) -> int:
@@ -235,8 +239,8 @@ def _compact_lines(notice: Notice) -> list[str]:
 
 def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -> DailyDigest:
     digest = DailyDigest(day=day, scan_status=scan_status)
-    # Exact/small-punctuation title duplicates from different campus sites share
-    # one digest entry. Storage still keeps both original notices and URLs.
+    # DeepSeek decides semantic cross-source duplicates. If AI is unavailable,
+    # only an identical source record is merged; similar title words are not enough.
     preferred: dict[str, tuple[int, Notice]] = {}
     priority = {"filter": 0, "review": 1, "keep": 2}
     for notice in notices:

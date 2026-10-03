@@ -40,10 +40,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $schedules = @(
-    @{ Name = "whu-notice-wechat-primary"; Cron = "50 20 * * *"; Phase = "wechat-sync" },
-    @{ Name = "whu-notice-wechat-retry"; Cron = "20 21 * * *"; Phase = "wechat-sync" },
-    @{ Name = "whu-notice-prepare"; Cron = "35 21 * * *"; Phase = "prepare" },
-    @{ Name = "whu-notice-freeze"; Cron = "50 21 * * *"; Phase = "freeze" },
+    @{ Name = "whu-notice-wechat-primary"; Cron = "30 21 * * *"; Phase = "wechat-sync" },
+    @{ Name = "whu-notice-wechat-retry"; Cron = "42 21 * * *"; Phase = "wechat-sync" },
+    @{ Name = "whu-notice-prepare"; Cron = "45 21 * * *"; Phase = "prepare" },
+    @{ Name = "whu-notice-freeze"; Cron = "55 21 * * *"; Phase = "freeze" },
     @{ Name = "whu-notice-main"; Cron = "0 22 * * *"; Phase = "send" },
     @{ Name = "whu-notice-retry-1"; Cron = "11 22 * * *"; Phase = "send" },
     @{ Name = "whu-notice-retry-2"; Cron = "41 22 * * *"; Phase = "send" },

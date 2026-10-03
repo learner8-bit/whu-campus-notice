@@ -88,7 +88,7 @@ class AIAnalysisTests(unittest.TestCase):
         self.assertEqual(digest.candidate_count, 0)
         self.assertEqual(digest.filtered_count, 1)
 
-    def test_event_key_merges_cross_site_duplicates(self) -> None:
+    def test_ai_dedupe_key_merges_cross_site_duplicates(self) -> None:
         first = sample_notice()
         second = sample_notice("关于举办全国大学生电子设计竞赛的通知")
         second.url = "https://uc.whu.edu.cn/info/2.htm"
@@ -102,10 +102,62 @@ class AIAnalysisTests(unittest.TestCase):
                 "needs_review": False,
                 "category": "竞赛",
                 "event_key": "2026全国大学生电子设计竞赛",
+                "action_stage": "参赛报名",
+                "dedupe_key": "2026全国大学生电子设计竞赛｜参赛报名｜9月30日",
                 "summary": "报名正在进行。",
             }
         digest = build_digest("2026-09-23", [first, second], {})
         self.assertEqual(digest.candidate_count, 1)
+
+    def test_same_event_different_action_stages_are_not_merged(self) -> None:
+        topic_call = sample_notice("关于征集AI应用场景设计大赛榜题的通知")
+        launch = sample_notice("AI应用场景设计大赛正式启动")
+        launch.url = "https://mp.weixin.qq.com/s/launch"
+        launch.site_id = "youth_league_wechat"
+        launch.site_name = "青春珞珈"
+        topic_call.ai_analysis = {
+            "schema_version": "ai_v4",
+            "actionable": True,
+            "audience_match": True,
+            "needs_review": False,
+            "category": "竞赛",
+            "event_key": "2026武汉大学AI应用场景设计大赛",
+            "action_stage": "榜题征集",
+            "dedupe_key": "2026武汉大学AI应用场景设计大赛｜榜题征集",
+        }
+        launch.ai_analysis = {
+            "schema_version": "ai_v4",
+            "actionable": True,
+            "audience_match": True,
+            "needs_review": False,
+            "category": "竞赛",
+            "event_key": "2026武汉大学AI应用场景设计大赛",
+            "action_stage": "参赛报名",
+            "dedupe_key": "2026武汉大学AI应用场景设计大赛｜参赛报名｜10月19日",
+        }
+
+        digest = build_digest("2026-10-02", [topic_call, launch], {})
+
+        self.assertEqual(digest.candidate_count, 2)
+
+    def test_without_ai_only_exact_records_are_merged(self) -> None:
+        first = sample_notice("AI大赛报名通知")
+        second = sample_notice("关于AI大赛报名的通知")
+        second.url = "https://example.edu/another"
+        digest = build_digest("2026-10-02", [first, second], {})
+        self.assertEqual(digest.candidate_count, 2)
+
+    def test_normalize_keeps_deepseek_semantic_dedupe_fields(self) -> None:
+        result = normalize_analysis({
+            "actionable": True,
+            "audience_match": True,
+            "category": "竞赛",
+            "event_key": "2026武汉大学AI应用场景设计大赛",
+            "action_stage": "参赛报名",
+            "dedupe_key": "2026武汉大学AI应用场景设计大赛｜参赛报名｜10月19日",
+        })
+        self.assertEqual(result["action_stage"], "参赛报名")
+        self.assertIn("参赛报名", result["dedupe_key"])
 
     def test_analysis_cache_round_trip(self) -> None:
         notice = sample_notice()

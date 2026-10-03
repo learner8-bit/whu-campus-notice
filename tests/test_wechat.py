@@ -167,6 +167,7 @@ class WechatTests(unittest.TestCase):
         analysis = {
             "schema_version": "ai_v3", "actionable": True, "audience_match": True,
             "needs_review": False, "category": "竞赛", "event_key": "2026竞赛",
+            "action_stage": "参赛报名", "dedupe_key": "2026竞赛｜参赛报名",
         }
         website.ai_analysis = dict(analysis)
         wechat.ai_analysis = dict(analysis)
@@ -207,6 +208,7 @@ class WechatTests(unittest.TestCase):
         analysis = {
             "schema_version": "ai_v3", "actionable": True, "audience_match": True,
             "needs_review": False, "category": "讲座", "event_key": "测试讲座",
+            "action_stage": "讲座报名", "dedupe_key": "测试讲座｜讲座报名",
         }
         website.ai_analysis = dict(analysis)
         wechat.ai_analysis = dict(analysis)
@@ -448,6 +450,62 @@ class WechatTests(unittest.TestCase):
             "https://mp.weixin.qq.com/s/article_token",
         )
         self.assertEqual(result.articles[0].published_at, "2026-09-30")
+
+    def test_weread_web_retries_same_day_after_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            state.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+            provider = WeReadWebProvider(state)
+            response = Mock(status_code=200)
+            response.json.return_value = {
+                "name": "青春珞珈",
+                "title": "竞赛报名通知",
+                "reviewId": "MP_WXS_1_article~token",
+                "digest": "报名摘要",
+                "publishTime": 1790524800,
+            }
+            response.raise_for_status = Mock()
+            provider.session.get = Mock(return_value=response)
+            today = __import__("datetime").datetime.now().date().isoformat()
+            result = provider.sync(
+                WechatAccount(
+                    id="youth_league_wechat",
+                    display_name="青春珞珈",
+                    book_id="MP_WXS_1",
+                ),
+                {
+                    "queried_on": today,
+                    "last_status": "unavailable",
+                    "last_error": "timeout",
+                },
+            )
+            provider.close()
+        self.assertTrue(result.attempted)
+        self.assertEqual(result.status, "healthy")
+        self.assertEqual(len(result.articles), 1)
+
+    def test_weread_web_skips_second_successful_same_day_query(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            state.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+            provider = WeReadWebProvider(state)
+            provider.session.get = Mock()
+            today = __import__("datetime").datetime.now().date().isoformat()
+            result = provider.sync(
+                WechatAccount(
+                    id="youth_league_wechat",
+                    display_name="青春珞珈",
+                    book_id="MP_WXS_1",
+                ),
+                {
+                    "queried_on": today,
+                    "last_status": "healthy",
+                    "last_error": "",
+                },
+            )
+            provider.close()
+        self.assertFalse(result.attempted)
+        self.assertEqual(result.status, "healthy")
 
     def test_weread_web_id_encoder_matches_known_example(self) -> None:
         self.assertEqual(encode_web_id("43208843"), "c9c321c07293508bc9c79df")
