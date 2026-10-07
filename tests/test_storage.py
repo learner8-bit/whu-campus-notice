@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from whu_notice_research.models import Notice  # noqa: E402
 from whu_notice_research.rules_v1 import RULESET_VERSION, decide  # noqa: E402
-from whu_notice_research.storage import NoticeStore  # noqa: E402
+from whu_notice_research.storage import NoticeStore, SyncResult  # noqa: E402
 
 
 class StorageTests(unittest.TestCase):
@@ -140,6 +140,41 @@ class StorageTests(unittest.TestCase):
                 store.finish_run(retry_id, retry)
                 self.assertEqual(len(retry.updated), 1)
                 self.assertIn(notice.url, store.known_urls("test"))
+
+    def test_source_initialization_is_independent_of_notice_count(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with NoticeStore(path) as store:
+                self.assertFalse(store.is_source_initialized("wechat"))
+                store.mark_source_initialized("wechat")
+                self.assertTrue(store.is_source_initialized("wechat"))
+                self.assertEqual(store.count("wechat"), 0)
+            with NoticeStore(path) as reopened:
+                self.assertTrue(reopened.is_source_initialized("wechat"))
+
+    def test_repeated_bootstrap_notice_is_recovered_as_live_new(self) -> None:
+        day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        with tempfile.TemporaryDirectory() as directory, NoticeStore(
+            Path(directory) / "state.sqlite3"
+        ) as store:
+            baseline = store.start_run("wechat", "bootstrap")
+            store.finish_run(baseline, SyncResult())
+
+            article = Notice(
+                "wechat", "公众号", "", "新发布但无日期的文章",
+                "https://mp.weixin.qq.com/s/live", site_id="wechat",
+            )
+            repeated = store.start_run("wechat", "bootstrap")
+            result = store.sync(
+                [article], {article.notice_id: decide(article.title)},
+                ruleset_version=RULESET_VERSION, run_id=repeated,
+            )
+            store.finish_run(repeated, result)
+
+            self.assertEqual(
+                [item.title for item in store.first_seen_on(day, "wechat")],
+                ["新发布但无日期的文章"],
+            )
 
     def test_today_query_excludes_baseline_but_keeps_live_new(self) -> None:
         day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()

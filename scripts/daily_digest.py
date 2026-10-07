@@ -139,7 +139,7 @@ def main() -> int:
                     database=args.database,
                 )
                 scan_status[site_id] = "ok"
-                if result.known_before == 0:
+                if not result.initialized_before:
                     baseline_today.extend(
                         notice for notice in result.sync.new if notice.published_at == day
                     )

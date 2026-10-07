@@ -22,6 +22,7 @@ class PipelineResult:
     known_before: int
     degraded_sources: list[str] | None = None
     provider_results: list[tuple[WechatAccount, ProviderResult]] | None = None
+    initialized_before: bool = False
 
 
 def run_incremental(
@@ -33,8 +34,11 @@ def run_incremental(
     new_output: Path | None = None,
 ) -> PipelineResult:
     with NoticeStore(database) as store:
+        initialized_before = store.is_source_initialized(site_id)
         known = store.known_urls(site_id)
-        run_id = store.start_run(site_id, "incremental" if known else "bootstrap")
+        run_id = store.start_run(
+            site_id, "incremental" if initialized_before else "bootstrap"
+        )
         try:
             degraded_sources: list[str] = []
             provider_results: list[tuple[WechatAccount, ProviderResult]] = []
@@ -43,7 +47,7 @@ def run_incremental(
                     project_root=project_root,
                     store=store,
                     days=days,
-                ).collect({"days": 30 if not known else days})
+                ).collect({"days": 30 if not initialized_before else days})
                 notices = collection.notices
                 degraded_sources = collection.degraded_accounts
                 provider_results = collection.provider_results
@@ -51,13 +55,16 @@ def run_incremental(
                 notices = WebsiteSourceAdapter(
                     site_id, days=days, project_root=project_root
                 ).collect(
-                    {"known_urls": list(known), "incremental": bool(known)}
+                    {
+                        "known_urls": list(known),
+                        "incremental": initialized_before,
+                    }
                 ).notices
             # Existing state means adapters returned only unseen notices. On a
             # first bootstrap, enrich only notices published today so that a
             # fresh deployment does not download months of historical files.
             today = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
-            enrichment_targets = notices if known else [
+            enrichment_targets = notices if initialized_before else [
                 notice for notice in notices if notice.published_at == today
             ]
             enrich_notices(enrichment_targets)
@@ -77,6 +84,7 @@ def run_incremental(
                 run_id=run_id,
             )
             store.finish_run(run_id, sync)
+            store.mark_source_initialized(site_id)
             if new_output is not None:
                 write_jsonl(new_output, sync.new)
             return PipelineResult(
@@ -86,6 +94,7 @@ def run_incremental(
                 len(known),
                 degraded_sources,
                 provider_results,
+                initialized_before,
             )
         except Exception as exc:
             empty = SyncResult()

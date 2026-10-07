@@ -109,6 +109,11 @@ class NoticeStore:
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY(source_id, provider)
             );
+            CREATE TABLE IF NOT EXISTS source_state (
+                site_id TEXT PRIMARY KEY,
+                initialized_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS provider_health (
                 publisher_id TEXT NOT NULL,
                 provider TEXT NOT NULL,
@@ -139,6 +144,17 @@ class NoticeStore:
             self.connection.execute(
                 "UPDATE notices SET first_run_id=last_run_id WHERE first_run_id IS NULL"
             )
+        # Upgrade existing databases without treating all established sources as
+        # new again. A successful historical bootstrap/import is sufficient to
+        # prove that the one-time baseline has already completed, even if that
+        # run found zero notices.
+        self.connection.execute(
+            "INSERT OR IGNORE INTO source_state(site_id, initialized_at, updated_at) "
+            "SELECT site_id, MIN(COALESCE(finished_at, started_at)), "
+            "MIN(COALESCE(finished_at, started_at)) FROM runs "
+            "WHERE status='success' AND mode IN ('bootstrap', 'import') "
+            "GROUP BY site_id"
+        )
         self.connection.commit()
 
     def start_run(self, site_id: str, mode: str) -> int:
@@ -182,6 +198,22 @@ class NoticeStore:
             for row in rows
             if not json.loads(row["payload_json"]).get("fetch_error")
         }
+
+    def is_source_initialized(self, site_id: str) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM source_state WHERE site_id=?", (site_id,)
+        ).fetchone()
+        return row is not None
+
+    def mark_source_initialized(self, site_id: str) -> None:
+        now = now_shanghai()
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO source_state(site_id, initialized_at, updated_at) "
+                "VALUES (?, ?, ?) ON CONFLICT(site_id) DO UPDATE SET "
+                "updated_at=excluded.updated_at",
+                (site_id, now, now),
+            )
 
     def get_cursor(self, source_id: str, provider: str) -> dict:
         row = self.connection.execute(
@@ -366,17 +398,22 @@ class NoticeStore:
 
     def first_seen_on(self, day: str, site_id: str | None = None) -> list[Notice]:
         """Live newly discovered records by China-local day, excluding baseline imports."""
+        eligibility = (
+            "(r.mode='incremental' OR (r.mode='bootstrap' AND EXISTS ("
+            "SELECT 1 FROM runs prior WHERE prior.site_id=r.site_id "
+            "AND prior.status='success' AND prior.run_id<r.run_id)))"
+        )
         if site_id is None:
             rows = self.connection.execute(
                 "SELECT n.payload_json FROM notices n JOIN runs r ON r.run_id=n.first_run_id "
-                "WHERE substr(n.first_seen_at, 1, 10)=? AND r.mode='incremental' "
+                f"WHERE substr(n.first_seen_at, 1, 10)=? AND {eligibility} "
                 "ORDER BY n.published_at DESC, n.title",
                 (day,),
             )
         else:
             rows = self.connection.execute(
                 "SELECT n.payload_json FROM notices n JOIN runs r ON r.run_id=n.first_run_id "
-                "WHERE substr(n.first_seen_at, 1, 10)=? AND r.mode='incremental' "
+                f"WHERE substr(n.first_seen_at, 1, 10)=? AND {eligibility} "
                 "AND n.site_id=? ORDER BY n.published_at DESC, n.title",
                 (day, site_id),
             )
