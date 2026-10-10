@@ -172,13 +172,13 @@ def main() -> int:
                     # whole daily message. Fall back to already persisted
                     # same-day data without contacting sources, then freeze it
                     # immediately so compensation sends stay identical.
-                    notices = store.first_seen_on(day) + store.published_on(day) + store.content_recovered_on(day)
+                    notices = store.first_seen_on(day) + store.published_on(day) + store.pending_recovered_content(day)
                     store.freeze_digest(day, notices)
                     print(f"{day}: freeze missing; created safe no-scan fallback", file=sys.stderr)
                 else:
                     notices = frozen
             else:
-                notices = store.first_seen_on(day) + store.published_on(day) + baseline_today + store.content_recovered_on(day)
+                notices = store.first_seen_on(day) + store.published_on(day) + baseline_today + store.pending_recovered_content(day)
         unique = list({item.notice_id: item for item in notices}.values())
         # Cloud phases run in separate processes. Recover parser failures from
         # persisted candidates BEFORE filtering, including excluded notices.
@@ -203,9 +203,14 @@ def main() -> int:
             store.freeze_digest(day, unique)
             print(f"freeze: day={day} notices={len(unique)}")
         digest = build_digest(day, unique, scan_status)
+        today_ids = {n.notice_id for n in unique}
         digest.incomplete_wechat_count = len({
-            n.notice_id for n in unique + content_failures
+            n.notice_id for n in unique
             if n.channel == "wechat" and (n.fetch_error or n.content_quality in {"metadata", "partial"})
+        })
+        digest.pending_wechat_backlog_count = len({
+            n.notice_id for n in content_failures if n.notice_id not in today_ids
+            and n.channel == "wechat" and (n.fetch_error or n.content_quality in {"metadata", "partial"})
         })
         plain = render_text(digest)
         html_body = render_html(digest)

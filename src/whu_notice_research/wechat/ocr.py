@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -12,11 +13,11 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGE_HOST_SUFFIXES = ("qpic.cn", "weixin.qq.com")
 
 
-def _download_image(url: str) -> bytes:
+def _download_image(url: str, *, timeout: float = 20) -> bytes:
     host = (urlparse(url).hostname or "").lower()
     if not any(host == suffix or host.endswith("." + suffix) for suffix in ALLOWED_IMAGE_HOST_SUFFIXES):
         raise ValueError("OCR 仅处理微信官方图片域名")
-    response = requests.get(url, timeout=20, stream=True)
+    response = requests.get(url, timeout=timeout, stream=True)
     response.raise_for_status()
     chunks: list[bytes] = []
     total = 0
@@ -28,24 +29,25 @@ def _download_image(url: str) -> bytes:
     return b"".join(chunks)
 
 
-def _google_ocr(data: bytes) -> str:
+def _google_ocr(data: bytes, *, timeout: float = 20) -> str:
     from google.cloud import vision
 
     response = vision.ImageAnnotatorClient().text_detection(
         image=vision.Image(content=data),
         image_context={"language_hints": ["zh-CN", "en"]},
+        timeout=timeout, retry=None,
     )
     if response.error.message:
         raise RuntimeError(response.error.message)
     return str(response.full_text_annotation.text or "").strip()
 
 
-def _local_ocr(data: bytes) -> str:
+def _local_ocr(data: bytes, *, timeout: float = 20) -> str:
     import pytesseract
     from PIL import Image
 
     with Image.open(io.BytesIO(data)) as image:
-        return str(pytesseract.image_to_string(image, lang="chi_sim+eng") or "").strip()
+        return str(pytesseract.image_to_string(image, lang="chi_sim+eng", timeout=timeout) or "").strip()
 
 
 def ocr_article_images(
@@ -54,6 +56,7 @@ def ocr_article_images(
     *,
     cloud_limit: int = 900,
     max_images: int = 5,
+    budget_seconds: float = 45,
 ) -> tuple[str, str]:
     """OCR likely poster images with a hard monthly cloud-image limit.
 
@@ -62,21 +65,26 @@ def ocr_article_images(
     """
     texts: list[str] = []
     engines: list[str] = []
+    deadline = time.monotonic() + budget_seconds
+    def remaining() -> float:
+        return max(0, min(20, deadline - time.monotonic()))
     for url in image_urls[:max_images]:
+        if remaining() <= 0:
+            break
         try:
-            data = _download_image(url)
+            data = _download_image(url, timeout=remaining())
         except Exception:
             continue
         text = ""
-        if store.reserve_cloud_ocr(limit=cloud_limit):
+        if remaining() > 0 and store.reserve_cloud_ocr(limit=cloud_limit):
             try:
-                text = _google_ocr(data)
+                text = _google_ocr(data, timeout=remaining())
                 engines.append("google_vision")
             except Exception:
                 text = ""
-        if not text:
+        if not text and remaining() > 0:
             try:
-                text = _local_ocr(data)
+                text = _local_ocr(data, timeout=remaining())
                 engines.append("tesseract")
             except Exception:
                 text = ""

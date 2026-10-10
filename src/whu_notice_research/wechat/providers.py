@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .identity import canonicalize_wechat_url, parse_article_biz, wechat_article_key
+from .article import WechatContentBlocked, parse_article_html
 from .models import ProviderResult, WechatAccount, WechatArticle
 from .weread import (
     WeReadAuthClient,
@@ -176,6 +177,8 @@ class WeReadWebProvider(WechatDiscoveryProvider):
     def __init__(self, state_path, *, timeout_ms: int = 35_000):
         self.state_path = str(state_path)
         self.timeout_ms = timeout_ms
+        self.content_unavailable = ""
+        self.public_content_blocked = False
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -197,6 +200,58 @@ class WeReadWebProvider(WechatDiscoveryProvider):
 
     def close(self) -> None:
         self.session.close()
+
+    def read_article(self, article: WechatArticle) -> WechatArticle:
+        """Read the same public article through the normal authenticated reader.
+
+        The official reader's FETCH_MP_CHAPTER_CONTENT_DATA action uses this
+        endpoint. Never follow redirects with this authenticated session or
+        attempt to solve an upstream challenge.
+        """
+        review_id = str(article.raw.get("review_id") or "")
+        if self.content_unavailable:
+            raise WechatContentBlocked(self.content_unavailable)
+        if not review_id:
+            raise WechatContentBlocked("缺少微信读书文章标识")
+        response = self.session.get(
+            "https://weread.qq.com/web/mp/content",
+            params={"reviewId": review_id},
+            headers={"Accept": "text/html,application/xhtml+xml,*/*"},
+            timeout=20, allow_redirects=False,
+        )
+        if response.status_code in {301, 302, 303, 307, 308, 401, 403}:
+            self.content_unavailable = "微信读书正文授权不可用，本轮已暂停该通道"
+            raise WechatContentBlocked(self.content_unavailable)
+        if response.status_code == 429:
+            self.content_unavailable = "微信读书正文读取被限频，本轮已暂停该通道"
+            raise WechatContentBlocked(self.content_unavailable)
+        response.raise_for_status()
+        source = response.text
+        if not source.strip():
+            raise WechatContentBlocked("微信读书未返回文章正文")
+        # Some deployments wrap the reader HTML in a JSON data envelope.
+        if source.lstrip().startswith("{"):
+            payload = response.json()
+            code = payload.get("errCode", payload.get("errcode", 0))
+            if code:
+                if code in {-2010, -2012, -2041}:
+                    self.content_unavailable = "微信读书正文授权失效或被限频，本轮已暂停该通道"
+                    raise WechatContentBlocked(self.content_unavailable)
+                raise WechatContentBlocked("微信读书正文接口未返回有效内容")
+            source = payload.get("data", "")
+            if not isinstance(source, str):
+                raise WechatContentBlocked("微信读书未返回可解析的正文")
+        parsed = parse_article_html(
+            source, article.url, publisher_id=article.publisher_id,
+            publisher_name=article.publisher_name, provider=article.provider,
+        )
+        parsed.title = parsed.title or article.title
+        parsed.summary = article.summary
+        parsed.published_at = parsed.published_at or article.published_at
+        parsed.article_key = article.article_key
+        parsed.raw = {k: v for k, v in article.raw.items() if k != "content_error"}
+        parsed.raw["content_provider"] = "weread_reader"
+        return parsed
 
     @staticmethod
     def _article_url(review_id: str, book_id: str) -> str:

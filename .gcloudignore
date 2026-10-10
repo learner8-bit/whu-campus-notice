@@ -1,0 +1,9 @@
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+competition/
+tests/
+docs/
+data/eis/
+data/undergraduate_school/

@@ -301,7 +301,8 @@ class EnrichmentTests(unittest.TestCase):
         message = "\n".join(feishu_parts(build_digest("2026-09-23", [notice], {})))
         self.assertNotIn("摘要：", message)
         self.assertIn("正文状态：暂未抓取到正文", message)
-        self.assertIn("原文（需校园网或武大 VPN）", message)
+        self.assertIn("原文：https://future.whu.edu.cn/", message)
+        self.assertNotIn("需校园网或武大 VPN", message)
 
 
 if __name__ == "__main__":

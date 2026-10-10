@@ -13,6 +13,7 @@ from .rules_v1 import RuleDecision
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+CONTENT_READER_REVISION = "weread-reader-v1"
 
 
 def now_shanghai() -> str:
@@ -150,6 +151,13 @@ class NoticeStore:
             self.connection.execute("ALTER TABLE notices ADD COLUMN first_run_id INTEGER")
             self.connection.execute(
                 "UPDATE notices SET first_run_id=last_run_id WHERE first_run_id IS NULL"
+            )
+        attempt_columns = {
+            str(row["name"]) for row in self.connection.execute("PRAGMA table_info(wechat_content_attempts)")
+        }
+        if "reader_revision" not in attempt_columns:
+            self.connection.execute(
+                "ALTER TABLE wechat_content_attempts ADD COLUMN reader_revision TEXT NOT NULL DEFAULT ''"
             )
         # Upgrade existing databases without treating all established sources as
         # new again. A successful historical bootstrap/import is sufficient to
@@ -325,16 +333,17 @@ class NoticeStore:
     def pending_wechat_content(self, day: str, *, limit: int = 20) -> list[Notice]:
         """Target only incomplete recent records, independently of discovery cursors.
 
-        One request per article/day, at most three recorded attempts, within
-        seven days of discovery. Old failed records are eligible after upgrade.
+        One attempt per article/day, at most three per reader revision, within
+        seven days of discovery. A new reader gets one bounded upgrade attempt.
         """
         cutoff = (date.fromisoformat(day) - timedelta(days=7)).isoformat()
         rows = self.connection.execute(
             "SELECT n.payload_json FROM notices n LEFT JOIN wechat_content_attempts a "
             "ON a.notice_id=n.notice_id WHERE n.site_id='wechat' "
             "AND substr(n.first_seen_at,1,10)>=? "
-            "AND (a.notice_id IS NULL OR (a.last_attempt_day<? AND a.attempt_count<3)) "
-            "ORDER BY n.first_seen_at DESC", (cutoff, day),
+            "AND (a.notice_id IS NULL OR a.reader_revision<>? "
+            "OR (a.last_attempt_day<? AND a.attempt_count<3)) "
+            "ORDER BY n.first_seen_at DESC", (cutoff, CONTENT_READER_REVISION, day),
         )
         pending = []
         for row in rows:
@@ -353,19 +362,24 @@ class NoticeStore:
 
     def wechat_content_attempt_allowed(self, notice_id: str, day: str) -> bool:
         row = self.connection.execute(
-            "SELECT last_attempt_day, attempt_count FROM wechat_content_attempts WHERE notice_id=?",
+            "SELECT last_attempt_day, attempt_count, reader_revision FROM wechat_content_attempts WHERE notice_id=?",
             (notice_id,),
         ).fetchone()
-        return row is None or (row["last_attempt_day"] < day and row["attempt_count"] < 3)
+        return row is None or row["reader_revision"] != CONTENT_READER_REVISION or (
+            row["last_attempt_day"] < day and row["attempt_count"] < 3
+        )
 
     def record_wechat_content_attempt(self, notice: Notice, day: str, *, recovered: bool = False) -> None:
         with self.connection:
             self.connection.execute(
-                "INSERT INTO wechat_content_attempts VALUES (?, ?, 1, ?, ?) "
+                "INSERT INTO wechat_content_attempts "
+                "(notice_id,last_attempt_day,attempt_count,last_error,recovered_on,reader_revision) "
+                "VALUES (?, ?, 1, ?, ?, ?) "
                 "ON CONFLICT(notice_id) DO UPDATE SET last_attempt_day=excluded.last_attempt_day, "
-                "attempt_count=attempt_count+1, last_error=excluded.last_error, "
-                "recovered_on=excluded.recovered_on",
-                (notice.notice_id, day, notice.fetch_error, day if recovered else ""),
+                "attempt_count=CASE WHEN reader_revision=excluded.reader_revision "
+                "THEN attempt_count+1 ELSE 1 END, last_error=excluded.last_error, "
+                "recovered_on=excluded.recovered_on, reader_revision=excluded.reader_revision",
+                (notice.notice_id, day, notice.fetch_error, day if recovered else "", CONTENT_READER_REVISION),
             )
 
     def content_recovered_on(self, day: str) -> list[Notice]:
@@ -374,6 +388,30 @@ class NoticeStore:
             "ON a.notice_id=n.notice_id WHERE a.recovered_on=? AND a.last_error=''", (day,),
         )
         return [Notice.from_dict(json.loads(row["payload_json"])) for row in rows]
+
+    def pending_recovered_content(self, day: str) -> list[Notice]:
+        """Carry repaired articles over until a completed digest includes them.
+
+        A repair after 22:00 must not disappear at midnight. Selection remains
+        bounded to seven days; normal AI relevance/deadline filtering applies.
+        """
+        cutoff = (date.fromisoformat(day) - timedelta(days=7)).isoformat()
+        delivered: dict[str, str] = {}
+        for row in self.connection.execute(
+            "SELECT f.notice_ids_json,f.frozen_at FROM digest_freezes f JOIN deliveries d "
+            "ON d.day=f.day WHERE f.day>=? AND f.day<=? AND d.channel='feishu-complete' "
+            "AND d.digest_hash='complete'", (cutoff, day),
+        ):
+            for notice_id in json.loads(row["notice_ids_json"]):
+                delivered[notice_id] = max(delivered.get(notice_id, ""), row["frozen_at"])
+        rows = self.connection.execute(
+            "SELECT n.payload_json FROM notices n JOIN wechat_content_attempts a "
+            "ON a.notice_id=n.notice_id WHERE a.recovered_on>=? AND a.recovered_on<=? "
+            "AND a.last_error=''", (cutoff, day),
+        )
+        return [n for row in rows if (
+            n := Notice.from_dict(json.loads(row["payload_json"]))
+        ).notice_id not in delivered or delivered[n.notice_id] < n.fetched_at]
 
     def content_failed_on(self, day: str) -> list[Notice]:
         rows = self.connection.execute(

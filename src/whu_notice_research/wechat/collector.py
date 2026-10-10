@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from ..models import Notice
@@ -109,24 +112,58 @@ def _pending_articles(store: NoticeStore, accounts: list[WechatAccount], today: 
                 attachments=notice.attachments, links=notice.links,
                 article_key=notice.wechat_article_key, provider=notice.discovery_provider,
                 content_quality=notice.content_quality,
+                raw={"review_id": notice.wechat_review_id or _legacy_review_id(notice.url, account),
+                     "book_id": notice.wechat_book_id or account.book_id},
             )
 
 
-def _read_content(article: WechatArticle, account: WechatAccount, store: NoticeStore) -> Notice:
+def _legacy_review_id(url: str, account: WechatAccount) -> str:
+    parsed = urlparse(url)
+    token = parsed.path.removeprefix("/s/")
+    if parsed.hostname != "mp.weixin.qq.com" or not parsed.path.startswith("/s/"):
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{22}", token) or not account.book_id:
+        return ""
+    # Inverse of WeReadWebProvider._article_url; only used to upgrade the old
+    # records whose verified publisher book ID is already in our registry.
+    return account.book_id + "_" + token.replace("_", "~")
+
+
+def _read_content(article: WechatArticle, account: WechatAccount, store: NoticeStore, *, reader=None) -> Notice:
+    # The ordinary authenticated reader is the primary body channel. Public
+    # WeChat pages frequently return a challenge from cloud IPs.
+    if reader is not None and article.content_quality not in {"full_text", "full_text_ocr"}:
+        article.raw["review_id"] = article.raw.get("review_id") or _legacy_review_id(article.url, account)
+        if article.raw["review_id"]:
+            try:
+                article = reader.read_article(article)
+            except WechatContentBlocked as exc:
+                article.raw["content_error"] = str(exc)
+            except Exception as exc:
+                article.raw["content_error"] = f"{type(exc).__name__}: 微信读书正文读取失败"
     try:
         if article.content_quality not in {"full_text", "full_text_ocr"}:
+            if reader is not None and getattr(reader, "public_content_blocked", False):
+                raise WechatContentBlocked("公众号公网正文通道本轮已暂停，请等待自动补读")
             article = fetch_article(article)
+            article.raw["content_provider"] = "mp_weixin"
     except WechatContentBlocked as exc:
-        article.raw["content_error"] = str(exc)
+        if reader is not None:
+            reader.public_content_blocked = True
+        prior = str(article.raw.get("content_error") or "")
+        article.raw["content_error"] = (prior + "；" if prior else "") + str(exc)
     except Exception as exc:
         # No raw request/response in health reports: upstream URLs may contain tokens.
-        article.raw["content_error"] = f"{type(exc).__name__}: 公众号正文读取失败"
+        prior = str(article.raw.get("content_error") or "")
+        article.raw["content_error"] = (prior + "；" if prior else "") + f"{type(exc).__name__}: 公众号正文读取失败"
     if article.images and len(article.body_text) < 500:
         try:
             ocr_text, engine = ocr_article_images(article.images, store)
             if ocr_text:
                 article.body_text = (article.body_text + "\n\n【海报 OCR】\n" + ocr_text).strip()
-                article.content_quality = "full_text_ocr"
+                if len(ocr_text.strip()) >= 80:
+                    article.content_quality = "full_text_ocr"
+                    article.raw.pop("content_error", None)
                 article.raw["ocr_engine"] = engine
         except Exception as exc:
             article.raw["content_error"] = f"{type(exc).__name__}: 海报 OCR 失败"
@@ -137,16 +174,29 @@ def _read_content(article: WechatArticle, account: WechatAccount, store: NoticeS
     return notice
 
 
-def retry_wechat_content(*, project_root: Path, store: NoticeStore) -> list[Notice]:
+def retry_wechat_content(*, project_root: Path, store: NoticeStore, on_notice=None) -> list[Notice]:
     """Repair pending bodies without requerying any article-discovery provider."""
     today = datetime.now(SHANGHAI).date().isoformat()
     registry = Path(os.getenv("WECHAT_ACCOUNTS_FILE", "").strip() or project_root / "config" / "wechat_accounts.json")
     accounts = [a for a in load_accounts(registry) if a.enabled and a.verified]
     repaired = []
-    for account, article in _pending_articles(store, accounts, today):
-        notice = _read_content(article, account, store)
-        store.record_wechat_content_attempt(notice, today, recovered=not bool(notice.fetch_error))
-        repaired.append(notice)
+    state = Path(os.getenv("WECHAT_WEB_STATE_FILE", "").strip() or project_root / "data/private/weread_web_state.json")
+    reader = WeReadWebProvider(state) if state.exists() else None
+    started = time.monotonic()
+    try:
+        for account, article in _pending_articles(store, accounts, today):
+            if time.monotonic() - started >= 240:
+                break
+            notice = _read_content(article, account, store, reader=reader)
+            # Persist each repaired payload BEFORE marking it recovered. An
+            # interrupted later OCR operation must not discard earlier work.
+            if on_notice is not None:
+                on_notice(notice)
+            store.record_wechat_content_attempt(notice, today, recovered=not bool(notice.fetch_error))
+            repaired.append(notice)
+    finally:
+        if reader:
+            reader.close()
     return repaired
 
 
@@ -172,6 +222,9 @@ def _to_notice(article: WechatArticle, account: WechatAccount) -> Notice:
         wechat_article_key=article.article_key,
         discovery_provider=article.provider,
         content_quality=article.content_quality,
+        content_provider=str(article.raw.get("content_provider") or ""),
+        wechat_review_id=str(article.raw.get("review_id") or ""),
+        wechat_book_id=str(article.raw.get("book_id") or ""),
         related_web_source_ids=list(account.related_web_sources),
         delivery_not_before=account.shadow_until,
     )
@@ -246,11 +299,6 @@ def collect_wechat(
                 continue
             all_articles.append((account, article))
 
-    for provider in providers.values():
-        close = getattr(provider, "close", None)
-        if callable(close):
-            close()
-
     # Union all providers first. Exact WeChat identity wins over provider name.
     unique: dict[str, tuple[WechatAccount, WechatArticle]] = {}
     for account, article in all_articles:
@@ -273,9 +321,13 @@ def collect_wechat(
             # overwrite an already complete article with a metadata-only row.
             result.notices.append(previous)
             continue
-        notice = _read_content(article, account, store)
+        notice = _read_content(article, account, store, reader=providers.get("weread_web"))
         store.record_wechat_content_attempt(
             notice, today, recovered=article.article_key in retry_keys and not notice.fetch_error,
         )
         result.notices.append(notice)
+    for provider in providers.values():
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
     return result

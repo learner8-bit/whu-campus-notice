@@ -35,6 +35,9 @@ class Notice:
     wechat_article_key: str = ""
     discovery_provider: str = ""
     content_quality: str = ""
+    content_provider: str = ""
+    wechat_review_id: str = ""
+    wechat_book_id: str = ""
     related_web_source_ids: list[str] = field(default_factory=list)
     delivery_not_before: str = ""
     # Runtime AI result. Cached separately so prompt/model changes do not make

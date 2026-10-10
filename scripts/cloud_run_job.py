@@ -105,7 +105,7 @@ def run_digest() -> int:
     os.environ["WECHAT_WEB_STATE_FILE"] = str(LOCAL_WECHAT_WEB_STATE)
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     phase = os.getenv("RUN_PHASE", "send").strip().lower()
-    if phase in {"wechat-sync", "wechat-content-repair"}:
+    if phase in {"wechat-sync", "wechat-content-repair", "content-audit"}:
         command = [
             sys.executable,
             str(ROOT / "scripts" / ("wechat_sync.py" if phase == "wechat-sync" else "repair_wechat_content.py")),
@@ -114,6 +114,8 @@ def run_digest() -> int:
         ]
         if phase == "wechat-sync":
             command.extend(("--days", days))
+        elif phase == "content-audit":
+            command.append("--report-only")
     else:
         command = [
             sys.executable,
@@ -176,7 +178,7 @@ def main() -> int:
     test_mode = environment_flag("TEST_MODE")
     # Repair is a no-send operation and may be run after midnight. The daily
     # notification deadline remains unchanged for all scheduled phases.
-    repair_only = os.getenv("RUN_PHASE", "send").strip().lower() == "wechat-content-repair"
+    repair_only = os.getenv("RUN_PHASE", "send").strip().lower() in {"wechat-content-repair", "content-audit"}
     if past_daily_send_cutoff() and not test_mode and not repair_only:
         print("send window: past 23:30 Asia/Shanghai; skipping")
         return 0
@@ -206,7 +208,7 @@ def main() -> int:
             bucket, web_state_object, LOCAL_WECHAT_WEB_STATE
         )
         exit_code = run_digest()
-        if test_mode:
+        if test_mode or os.getenv("RUN_PHASE", "").strip().lower() == "content-audit":
             print("test mode: production state was not uploaded")
         else:
             upload_database(bucket, state_object, state_generation)

@@ -26,6 +26,7 @@ class DailyDigest:
     filtered_count: int = 0
     scan_status: dict[str, str] = field(default_factory=dict)
     incomplete_wechat_count: int = 0
+    pending_wechat_backlog_count: int = 0
 
     @property
     def title(self) -> str:
@@ -175,7 +176,12 @@ def _deadline_subject(label: str) -> str:
         "",
         subject,
     )
-    return subject.strip(" ：:，,、-—（）()")
+    # Do not strip a matched closing bracket from a school's alias.
+    subject = subject.strip(" ：:，,、-—")
+    for opening, closing in (("（", "）"), ("(", ")")):
+        if subject.startswith(opening) and subject.endswith(closing):
+            subject = subject[1:-1].strip()
+    return subject
 
 
 def _concise_deadlines(rows: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -203,7 +209,8 @@ def _has_detail_content(notice: Notice) -> bool:
 
 
 def _original_label(notice: Notice) -> str:
-    if urlparse(notice.url).hostname == "future.whu.edu.cn":
+    host = urlparse(notice.url).hostname or ""
+    if host == "vpn.whu.edu.cn" or host.endswith(".vpn.whu.edu.cn"):
         return "原文（需校园网或武大 VPN）"
     return "原文"
 
@@ -227,10 +234,10 @@ def _compact_lines(notice: Notice) -> list[str]:
         for name, url in attachments:
             lines.append(f"- {name}" + (f"：{url}" if url else ""))
     lines.append(f"{_original_label(notice)}：{notice.url}")
-    if not _has_detail_content(notice):
+    if notice.fetch_error or not _has_detail_content(notice):
         lines.append(
             "正文状态：暂未完整读取，请在微信中查看原文。" if notice.channel == "wechat"
-            else "正文状态：暂未抓取到正文，请连接校园网或武大 VPN 后查看原文。"
+            else "正文状态：暂未抓取到正文，请打开原文核实。"
         )
     if notice.ai_analysis.get("schema_version"):
         summary = str(notice.ai_analysis.get("summary") or "").strip()
@@ -312,7 +319,7 @@ def render_text(digest: DailyDigest) -> str:
         lines.append("采集失败：" + "、".join(failures))
     if not digest.candidate_count:
         lines.append("今日暂无新增的有效候选信息。")
-    if digest.incomplete_wechat_count:
+    if digest.incomplete_wechat_count or digest.pending_wechat_backlog_count:
         lines.append(_coverage_warning(digest))
     for notice in _display_notices(digest):
         lines.append("")
@@ -322,7 +329,12 @@ def render_text(digest: DailyDigest) -> str:
 
 
 def _coverage_warning(digest: DailyDigest) -> str:
-    return f"⚠️ {digest.incomplete_wechat_count} 篇公众号正文未完整读取，今日结果可能不完整。"
+    parts = []
+    if digest.incomplete_wechat_count:
+        parts.append(f"今日候选中 {digest.incomplete_wechat_count} 篇公众号正文未完整读取，结果可能不完整")
+    if digest.pending_wechat_backlog_count:
+        parts.append(f"另有 {digest.pending_wechat_backlog_count} 篇历史文章待补读")
+    return "⚠️ " + "；".join(parts) + "。"
 
 
 def render_html(digest: DailyDigest) -> str:
@@ -336,7 +348,7 @@ def render_html(digest: DailyDigest) -> str:
         out.append('<p style="color:#a35b00">采集失败：' + html.escape("、".join(failures)) + "</p>")
     if not digest.candidate_count:
         out.append("<p>今日暂无新增的有效候选信息。</p>")
-    if digest.incomplete_wechat_count:
+    if digest.incomplete_wechat_count or digest.pending_wechat_backlog_count:
         out.append(f"<p>{html.escape(_coverage_warning(digest))}</p>")
     for notice in _display_notices(digest):
         compact = _compact_lines(notice)
@@ -359,7 +371,7 @@ def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
         header += "\n⚠ 采集失败：" + "、".join(failures)
-    if digest.incomplete_wechat_count:
+    if digest.incomplete_wechat_count or digest.pending_wechat_backlog_count:
         header += "\n" + _coverage_warning(digest)
     entries: list[str] = []
     for notice in _display_notices(digest):
