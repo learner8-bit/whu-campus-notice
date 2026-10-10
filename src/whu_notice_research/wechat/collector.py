@@ -79,14 +79,75 @@ def _merge_articles(values: list[WechatArticle]) -> list[WechatArticle]:
             merged[article.article_key] = article
             continue
         if priority.get(article.provider, 0) > priority.get(current.provider, 0):
-            article.title = article.title or current.title
-            article.published_at = article.published_at or current.published_at
+            _merge_content(article, current)
             merged[article.article_key] = article
         else:
-            current.title = current.title or article.title
-            current.published_at = current.published_at or article.published_at
-            current.url = current.url or article.url
+            _merge_content(current, article)
     return list(merged.values())
+
+
+def _merge_content(target: WechatArticle, other: WechatArticle) -> None:
+    for name in ("title", "published_at", "url", "summary"):
+        setattr(target, name, getattr(target, name) or getattr(other, name))
+    if len(other.body_text) > len(target.body_text):
+        target.body_text = other.body_text
+        target.content_quality = other.content_quality
+    for name in ("attachments", "links", "images"):
+        rows = getattr(target, name)
+        rows.extend(item for item in getattr(other, name) if item not in rows)
+
+
+def _pending_articles(store: NoticeStore, accounts: list[WechatAccount], today: str):
+    by_id = {account.id: account for account in accounts}
+    for notice in store.pending_wechat_content(today):
+        account = by_id.get(notice.publisher_id or notice.source_id)
+        if account:
+            yield account, WechatArticle(
+                publisher_id=account.id, publisher_name=account.display_name,
+                title=notice.title, url=notice.url, published_at=notice.published_at,
+                summary=notice.summary, body_text=notice.body_text,
+                attachments=notice.attachments, links=notice.links,
+                article_key=notice.wechat_article_key, provider=notice.discovery_provider,
+                content_quality=notice.content_quality,
+            )
+
+
+def _read_content(article: WechatArticle, account: WechatAccount, store: NoticeStore) -> Notice:
+    try:
+        if article.content_quality not in {"full_text", "full_text_ocr"}:
+            article = fetch_article(article)
+    except WechatContentBlocked as exc:
+        article.raw["content_error"] = str(exc)
+    except Exception as exc:
+        # No raw request/response in health reports: upstream URLs may contain tokens.
+        article.raw["content_error"] = f"{type(exc).__name__}: 公众号正文读取失败"
+    if article.images and len(article.body_text) < 500:
+        try:
+            ocr_text, engine = ocr_article_images(article.images, store)
+            if ocr_text:
+                article.body_text = (article.body_text + "\n\n【海报 OCR】\n" + ocr_text).strip()
+                article.content_quality = "full_text_ocr"
+                article.raw["ocr_engine"] = engine
+        except Exception as exc:
+            article.raw["content_error"] = f"{type(exc).__name__}: 海报 OCR 失败"
+    if article.content_quality in {"metadata", "partial"}:
+        article.raw.setdefault("content_error", "公众号正文不完整，关键条件可能缺失")
+    notice = _to_notice(article, account)
+    notice.fetch_error = str(article.raw.get("content_error") or "")
+    return notice
+
+
+def retry_wechat_content(*, project_root: Path, store: NoticeStore) -> list[Notice]:
+    """Repair pending bodies without requerying any article-discovery provider."""
+    today = datetime.now(SHANGHAI).date().isoformat()
+    registry = Path(os.getenv("WECHAT_ACCOUNTS_FILE", "").strip() or project_root / "config" / "wechat_accounts.json")
+    accounts = [a for a in load_accounts(registry) if a.enabled and a.verified]
+    repaired = []
+    for account, article in _pending_articles(store, accounts, today):
+        notice = _read_content(article, account, store)
+        store.record_wechat_content_attempt(notice, today, recovered=not bool(notice.fetch_error))
+        repaired.append(notice)
+    return repaired
 
 
 def _to_notice(article: WechatArticle, account: WechatAccount) -> Notice:
@@ -196,26 +257,25 @@ def collect_wechat(
         if not article.url:
             continue
         unique.setdefault(article.article_key, (account, article))
+    pending = list(_pending_articles(store, accounts, today))
+    retry_keys = {article.article_key for _, article in pending}
+    for account, article in pending:
+        unique.setdefault(article.article_key, (account, article))
     for account, article in unique.values():
-        if article.url:
-            try:
-                article = fetch_article(article)
-            except WechatContentBlocked as exc:
-                article.content_quality = "metadata"
-                article.raw["content_error"] = str(exc)
-            except Exception as exc:
-                article.content_quality = "metadata"
-                article.raw["content_error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
-        # Image-heavy posts frequently keep the deadline only in a poster.
-        # Avoid OCR for ordinary long-form articles to conserve the free tier.
-        if article.images and len(article.body_text) < 500:
-            ocr_text, engine = ocr_article_images(article.images, store)
-            if ocr_text:
-                article.body_text = (article.body_text + "\n\n【海报 OCR】\n" + ocr_text).strip()
-                article.content_quality = "full_text_ocr"
-                article.raw["ocr_engine"] = engine
-        notice = _to_notice(article, account)
-        if article.raw.get("content_error"):
-            notice.fetch_error = str(article.raw["content_error"])
+        identity = _to_notice(article, account).notice_id
+        previous = store.notice_by_id(identity)
+        if previous and (
+            not store.wechat_content_attempt_allowed(identity, today)
+            or (previous.content_quality in {"full_text", "full_text_ocr"} and not previous.fetch_error)
+        ):
+            # Another provider can rediscover the same URL after its discovery
+            # cursor advances. It must not bypass the content retry budget or
+            # overwrite an already complete article with a metadata-only row.
+            result.notices.append(previous)
+            continue
+        notice = _read_content(article, account, store)
+        store.record_wechat_content_attempt(
+            notice, today, recovered=article.article_key in retry_keys and not notice.fetch_error,
+        )
         result.notices.append(notice)
     return result

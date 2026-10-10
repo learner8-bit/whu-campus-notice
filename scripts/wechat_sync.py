@@ -28,10 +28,13 @@ def main() -> int:
         f"wechat: fetched={result.fetched_count} new={len(result.sync.new)} "
         f"updated={len(result.sync.updated)} degraded={len(result.degraded_sources or [])}"
     )
+    notices = result.sync.new + result.sync.updated + result.sync.unchanged
+    complete = sum(n.content_quality in {"full_text", "full_text_ocr"} and not n.fetch_error for n in notices)
+    print(f"wechat content: complete={complete} incomplete={len(notices)-complete}")
     for account, provider in result.provider_results or []:
         detail = f" error={provider.error}" if provider.error else ""
         print(
-            f"wechat provider: account={account.display_name} "
+            f"wechat discovery provider: account={account.display_name} "
             f"provider={provider.provider} status={provider.status} "
             f"attempted={str(provider.attempted).lower()} "
             f"articles={len(provider.articles)}{detail}"

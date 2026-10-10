@@ -35,6 +35,8 @@ def notice_health_issues(notice: Notice) -> list[HealthIssue]:
     source = notice.site_name or notice.site_id
     if notice.fetch_error:
         issues.append(HealthIssue("detail", source, f"{notice.title}: {notice.fetch_error}"))
+    elif notice.channel == "wechat" and notice.content_quality in {"metadata", "partial"}:
+        issues.append(HealthIssue("detail", source, f"{notice.title}: 仅发现标题或不完整正文，不能确认完整采集"))
     for item in notice.attachments:
         if item.get("status") == "failed":
             name = item.get("text") or item.get("url") or "unnamed attachment"

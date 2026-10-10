@@ -4,6 +4,7 @@ import html as html_lib
 import re
 from datetime import datetime
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -35,7 +36,7 @@ def _published_date(soup: BeautifulSoup, source: str) -> str:
     for pattern in (r"(?:create_time|publish_time)\s*[:=]\s*['\"]?(\d{10})", r"ct\s*[:=]\s*['\"](\d{10})"):
         match = re.search(pattern, source)
         if match:
-            return datetime.fromtimestamp(int(match.group(1))).date().isoformat()
+            return datetime.fromtimestamp(int(match.group(1)), ZoneInfo("Asia/Shanghai")).date().isoformat()
     return ""
 
 
@@ -47,8 +48,6 @@ def parse_article_html(
     publisher_name: str,
     provider: str,
 ) -> WechatArticle:
-    if any(marker in source for marker in CHALLENGE_MARKERS):
-        raise WechatContentBlocked("公众号页面要求人工验证，系统不会尝试绕过")
     soup = BeautifulSoup(source, "html.parser")
     content = soup.select_one("#js_content") or soup.select_one(".rich_media_content")
     title_node = soup.select_one("#activity-name") or soup.select_one("h1.rich_media_title")
@@ -58,6 +57,10 @@ def parse_article_html(
         str(meta_title.get("content") or "").strip() if meta_title else ""
     )
     if content is None:
+        # Normal article templates also contain verification strings in JS.
+        # Only classify a challenge when there is no actual article content.
+        if any(marker in soup.get_text(" ", strip=True) for marker in CHALLENGE_MARKERS):
+            raise WechatContentBlocked("公众号页面要求人工验证，已暂停本次正文读取")
         raise WechatContentBlocked("页面没有公众号正文，可能是特殊文章或访问受限")
     for node in content.select("script, style, iframe, object, embed, form"):
         node.decompose()
@@ -102,16 +105,20 @@ def fetch_article(
     session: requests.Session | None = None,
 ) -> WechatArticle:
     client = session or requests.Session()
-    response = client.get(
-        article.url,
-        timeout=timeout,
-        allow_redirects=True,
-        headers={
-            "User-Agent": BROWSER_UA,
-            "Accept-Language": "zh-CN,zh;q=0.9",
-            "Referer": "https://mp.weixin.qq.com/",
-        },
-    )
+    try:
+        response = client.get(
+            article.url,
+            timeout=timeout,
+            allow_redirects=True,
+            headers={
+                "User-Agent": BROWSER_UA,
+                "Accept-Language": "zh-CN,zh;q=0.9",
+                "Referer": "https://mp.weixin.qq.com/",
+            },
+        )
+    finally:
+        if session is None:
+            client.close()
     if response.status_code == 429:
         raise WechatContentBlocked("公众号正文读取被限频")
     response.raise_for_status()
@@ -126,5 +133,5 @@ def fetch_article(
     parsed.summary = article.summary
     parsed.published_at = parsed.published_at or article.published_at
     parsed.article_key = article.article_key
-    parsed.raw = article.raw
+    parsed.raw = {key: value for key, value in article.raw.items() if key != "content_error"}
     return parsed

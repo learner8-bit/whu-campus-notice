@@ -172,14 +172,19 @@ def main() -> int:
                     # whole daily message. Fall back to already persisted
                     # same-day data without contacting sources, then freeze it
                     # immediately so compensation sends stay identical.
-                    notices = store.first_seen_on(day) + store.published_on(day)
+                    notices = store.first_seen_on(day) + store.published_on(day) + store.content_recovered_on(day)
                     store.freeze_digest(day, notices)
                     print(f"{day}: freeze missing; created safe no-scan fallback", file=sys.stderr)
                 else:
                     notices = frozen
             else:
-                notices = store.first_seen_on(day) + store.published_on(day) + baseline_today
+                notices = store.first_seen_on(day) + store.published_on(day) + baseline_today + store.content_recovered_on(day)
         unique = list({item.notice_id: item for item in notices}.values())
+        # Cloud phases run in separate processes. Recover parser failures from
+        # persisted candidates BEFORE filtering, including excluded notices.
+        content_failures = store.content_failed_on(day)
+        for notice in unique + content_failures:
+            health_issues.extend(notice_health_issues(notice))
         ai_stats = attach_ai_analyses(
             unique,
             store,
@@ -198,6 +203,10 @@ def main() -> int:
             store.freeze_digest(day, unique)
             print(f"freeze: day={day} notices={len(unique)}")
         digest = build_digest(day, unique, scan_status)
+        digest.incomplete_wechat_count = len({
+            n.notice_id for n in unique + content_failures
+            if n.channel == "wechat" and (n.fetch_error or n.content_quality in {"metadata", "partial"})
+        })
         plain = render_text(digest)
         html_body = render_html(digest)
         args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -206,6 +215,10 @@ def main() -> int:
         html_path = args.output_dir / f"digest_{suffix}.html"
         text_path.write_text(plain, encoding="utf-8")
         html_path.write_text(html_body, encoding="utf-8")
+        if health_issues:
+            alert = render_health_alert(day, health_issues)
+            (args.output_dir / f"health_{suffix}.txt").write_text(alert, encoding="utf-8")
+            print(f"health: issues={len(set(health_issues))}")
         print(
             f"digest: keep={len(digest.keep)} review={len(digest.review)} "
             f"filtered={digest.filtered_count} text={text_path} html={html_path}"
@@ -234,9 +247,6 @@ def main() -> int:
                     health_issues.append(HealthIssue("delivery", "飞书", str(exc)))
                     print(f"Feishu part {index}: {exc}", file=sys.stderr)
 
-            if not feishu_failed and not args.force_send:
-                store.mark_delivery_complete(day, "feishu")
-
             if health_issues:
                 alert = render_health_alert(day, health_issues)
                 alert_hash = content_hash(alert)
@@ -251,10 +261,16 @@ def main() -> int:
                             with open(github_env, "a", encoding="utf-8") as handle:
                                 handle.write("HEALTH_ALERT_SENT=true\n")
                     except RuntimeError as exc:
+                        feishu_failed = True
                         failed = True
                         print(f"Feishu health alert: {exc}", file=sys.stderr)
                 else:
                     print("Feishu health alert: already sent")
+
+            # A failed health alert must remain retryable; digest part hashes
+            # prevent those already sent from being sent a second time.
+            if not feishu_failed and not args.force_send:
+                store.mark_delivery_complete(day, "feishu")
 
         if args.channels in {"email", "both"}:
             email_failed = False

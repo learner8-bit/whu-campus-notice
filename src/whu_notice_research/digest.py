@@ -25,6 +25,7 @@ class DailyDigest:
     review: list[Notice] = field(default_factory=list)
     filtered_count: int = 0
     scan_status: dict[str, str] = field(default_factory=dict)
+    incomplete_wechat_count: int = 0
 
     @property
     def title(self) -> str:
@@ -227,7 +228,10 @@ def _compact_lines(notice: Notice) -> list[str]:
             lines.append(f"- {name}" + (f"：{url}" if url else ""))
     lines.append(f"{_original_label(notice)}：{notice.url}")
     if not _has_detail_content(notice):
-        lines.append("正文状态：暂未抓取到正文，请连接校园网或武大 VPN 后查看原文。")
+        lines.append(
+            "正文状态：暂未完整读取，请在微信中查看原文。" if notice.channel == "wechat"
+            else "正文状态：暂未抓取到正文，请连接校园网或武大 VPN 后查看原文。"
+        )
     if notice.ai_analysis.get("schema_version"):
         summary = str(notice.ai_analysis.get("summary") or "").strip()
     else:
@@ -239,6 +243,11 @@ def _compact_lines(notice: Notice) -> list[str]:
 
 def build_digest(day: str, notices: list[Notice], scan_status: dict[str, str]) -> DailyDigest:
     digest = DailyDigest(day=day, scan_status=scan_status)
+    digest.incomplete_wechat_count = sum(
+        notice.channel == "wechat" and (
+            bool(notice.fetch_error) or notice.content_quality in {"metadata", "partial"}
+        ) for notice in {n.notice_id: n for n in notices}.values()
+    )
     # DeepSeek decides semantic cross-source duplicates. If AI is unavailable,
     # only an identical source record is merged; similar title words are not enough.
     preferred: dict[str, tuple[int, Notice]] = {}
@@ -292,7 +301,7 @@ def _display_notices(digest: DailyDigest) -> list[Notice]:
 def _excerpt(notice: Notice, limit: int = 160) -> str:
     text = re.sub(r"\s+", " ", notice.summary or notice.body_text).strip()
     if not text and notice.fetch_error:
-        return "详情页暂不可用，请点开官网原文核实。"
+        return "详情页暂不可用，请点开原文核实。"
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
@@ -303,11 +312,17 @@ def render_text(digest: DailyDigest) -> str:
         lines.append("采集失败：" + "、".join(failures))
     if not digest.candidate_count:
         lines.append("今日暂无新增的有效候选信息。")
+    if digest.incomplete_wechat_count:
+        lines.append(_coverage_warning(digest))
     for notice in _display_notices(digest):
         lines.append("")
         lines.extend(_compact_lines(notice))
     lines.extend(("", "请以官网原文为准。"))
     return "\n".join(lines)
+
+
+def _coverage_warning(digest: DailyDigest) -> str:
+    return f"⚠️ {digest.incomplete_wechat_count} 篇公众号正文未完整读取，今日结果可能不完整。"
 
 
 def render_html(digest: DailyDigest) -> str:
@@ -321,6 +336,8 @@ def render_html(digest: DailyDigest) -> str:
         out.append('<p style="color:#a35b00">采集失败：' + html.escape("、".join(failures)) + "</p>")
     if not digest.candidate_count:
         out.append("<p>今日暂无新增的有效候选信息。</p>")
+    if digest.incomplete_wechat_count:
+        out.append(f"<p>{html.escape(_coverage_warning(digest))}</p>")
     for notice in _display_notices(digest):
         compact = _compact_lines(notice)
         out.append('<section style="padding:14px 0;border-top:1px solid #ddd">')
@@ -342,6 +359,8 @@ def feishu_parts(digest: DailyDigest, max_chars: int = 3500) -> list[str]:
     failures = [name for name, status in digest.scan_status.items() if status != "ok"]
     if failures:
         header += "\n⚠ 采集失败：" + "、".join(failures)
+    if digest.incomplete_wechat_count:
+        header += "\n" + _coverage_warning(digest)
     entries: list[str] = []
     for notice in _display_notices(digest):
         entries.append("\n".join(_compact_lines(notice)))

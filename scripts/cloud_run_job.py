@@ -105,15 +105,15 @@ def run_digest() -> int:
     os.environ["WECHAT_WEB_STATE_FILE"] = str(LOCAL_WECHAT_WEB_STATE)
     LOCAL_OUTPUT.mkdir(parents=True, exist_ok=True)
     phase = os.getenv("RUN_PHASE", "send").strip().lower()
-    if phase == "wechat-sync":
+    if phase in {"wechat-sync", "wechat-content-repair"}:
         command = [
             sys.executable,
-            str(ROOT / "scripts" / "wechat_sync.py"),
-            "--days",
-            days,
+            str(ROOT / "scripts" / ("wechat_sync.py" if phase == "wechat-sync" else "repair_wechat_content.py")),
             "--database",
             str(LOCAL_DATABASE),
         ]
+        if phase == "wechat-sync":
+            command.extend(("--days", days))
     else:
         command = [
             sys.executable,
@@ -174,7 +174,10 @@ def upload_private_if_changed(
 
 def main() -> int:
     test_mode = environment_flag("TEST_MODE")
-    if past_daily_send_cutoff() and not test_mode:
+    # Repair is a no-send operation and may be run after midnight. The daily
+    # notification deadline remains unchanged for all scheduled phases.
+    repair_only = os.getenv("RUN_PHASE", "send").strip().lower() == "wechat-content-repair"
+    if past_daily_send_cutoff() and not test_mode and not repair_only:
         print("send window: past 23:30 Asia/Shanghai; skipping")
         return 0
 

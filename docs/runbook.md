@@ -31,3 +31,21 @@ python -m unittest discover -s tests -v
 ## 验证限制
 
 本科生院部分旧链接会转到官网验证码页。程序会把这类详情记为 `BlockedPageError`，保留列表标题和原始地址，绝不将验证码页当正文。当前 180 天历史样本中 30/82 条受此影响，因此附件和正文统计是已取得内容的下限。原始误采备份在 `data/undergraduate_school/notices.pre-verification-fix.jsonl` 和 `data/state/notices.pre-verification-fix.sqlite3`；修复脚本 `scripts/repair_uc_challenge_rows.py` 只用于恢复这批旧样本，不绕过验证码。
+
+## 公众号正文失败与补读
+
+公众号发现通道 `healthy` 只表示成功发现文章，**不代表正文已读取**。同步日志另列 `wechat content: complete=... incomplete=...`；正文状态保存在 Notice 的 `content_quality` 和 `fetch_error` 中。
+
+正文失败不再依赖文章发现游标：`wechat_content_attempts` 独立记录尝试，每篇每天最多读取一次、累计最多三次，只补读发现后七天以内的不完整记录，一批最多20条。正常同步自动补读，不回扫历史文章列表，也不绕过验证码。升级前失败记录没有尝试表时可自动纳入补读。其他发现通道重复返回同一篇文章也不能突破重试限制或覆盖已成功读取的正文。
+
+独立修复命令（不发现新文章、不发送飞书、不运行 AI）：
+
+```powershell
+python scripts/repair_wechat_content.py --database data/state/notices.sqlite3
+```
+
+Cloud Run 包装器支持 `RUN_PHASE=wechat-content-repair`；该阶段可在发送窗口外运行，但仍使用对象锁、状态版本校验和私有凭证存储。不要在不确定状态是否生产的情况下手工覆盖数据库。
+
+补读成功的通知可进入补读当日的筛选集合，AI 根据新的正文内容哈希重新分析。心理活动等现有排除条件保持不变，不因补读成功就自动推送。
+
+发送阶段从冻结集合及当日失败补读记录重建正文健康告警，先汇总故障再筛选，故障不会因为该通知被过滤而消失。日报包含简短覆盖缺口提示；完整告警另发飞书，并保存为 `data/runs/health_YYYY-MM-DD.txt`。告警发送失败时不标记当日全部完成，补偿任务只补发失败告警，已成功的日报分片不会重复。

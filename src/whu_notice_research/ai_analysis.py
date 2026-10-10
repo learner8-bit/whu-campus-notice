@@ -137,6 +137,8 @@ def _notice_input(notice: Notice) -> str:
         "title": notice.title,
         "summary": notice.summary,
         "body": notice.body_text,
+        "content_quality": notice.content_quality,
+        "content_incomplete": bool(notice.fetch_error) or notice.content_quality in {"metadata", "partial"},
         "attachments": attachments,
         "external_pages": external_pages,
     }

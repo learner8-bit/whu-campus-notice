@@ -134,6 +134,13 @@ class NoticeStore:
                 notice_ids_json TEXT NOT NULL,
                 frozen_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS wechat_content_attempts (
+                notice_id TEXT PRIMARY KEY,
+                last_attempt_day TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL,
+                last_error TEXT NOT NULL DEFAULT '',
+                recovered_on TEXT NOT NULL DEFAULT ''
+            );
             """
         )
         columns = {
@@ -315,6 +322,66 @@ class NoticeStore:
             )
         return True
 
+    def pending_wechat_content(self, day: str, *, limit: int = 20) -> list[Notice]:
+        """Target only incomplete recent records, independently of discovery cursors.
+
+        One request per article/day, at most three recorded attempts, within
+        seven days of discovery. Old failed records are eligible after upgrade.
+        """
+        cutoff = (date.fromisoformat(day) - timedelta(days=7)).isoformat()
+        rows = self.connection.execute(
+            "SELECT n.payload_json FROM notices n LEFT JOIN wechat_content_attempts a "
+            "ON a.notice_id=n.notice_id WHERE n.site_id='wechat' "
+            "AND substr(n.first_seen_at,1,10)>=? "
+            "AND (a.notice_id IS NULL OR (a.last_attempt_day<? AND a.attempt_count<3)) "
+            "ORDER BY n.first_seen_at DESC", (cutoff, day),
+        )
+        pending = []
+        for row in rows:
+            notice = Notice.from_dict(json.loads(row["payload_json"]))
+            if notice.fetch_error or notice.content_quality in {"metadata", "partial"}:
+                pending.append(notice)
+                if len(pending) >= limit:
+                    break
+        return pending
+
+    def notice_by_id(self, notice_id: str) -> Notice | None:
+        row = self.connection.execute(
+            "SELECT payload_json FROM notices WHERE notice_id=?", (notice_id,),
+        ).fetchone()
+        return Notice.from_dict(json.loads(row["payload_json"])) if row else None
+
+    def wechat_content_attempt_allowed(self, notice_id: str, day: str) -> bool:
+        row = self.connection.execute(
+            "SELECT last_attempt_day, attempt_count FROM wechat_content_attempts WHERE notice_id=?",
+            (notice_id,),
+        ).fetchone()
+        return row is None or (row["last_attempt_day"] < day and row["attempt_count"] < 3)
+
+    def record_wechat_content_attempt(self, notice: Notice, day: str, *, recovered: bool = False) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO wechat_content_attempts VALUES (?, ?, 1, ?, ?) "
+                "ON CONFLICT(notice_id) DO UPDATE SET last_attempt_day=excluded.last_attempt_day, "
+                "attempt_count=attempt_count+1, last_error=excluded.last_error, "
+                "recovered_on=excluded.recovered_on",
+                (notice.notice_id, day, notice.fetch_error, day if recovered else ""),
+            )
+
+    def content_recovered_on(self, day: str) -> list[Notice]:
+        rows = self.connection.execute(
+            "SELECT n.payload_json FROM notices n JOIN wechat_content_attempts a "
+            "ON a.notice_id=n.notice_id WHERE a.recovered_on=? AND a.last_error=''", (day,),
+        )
+        return [Notice.from_dict(json.loads(row["payload_json"])) for row in rows]
+
+    def content_failed_on(self, day: str) -> list[Notice]:
+        rows = self.connection.execute(
+            "SELECT n.payload_json FROM notices n JOIN wechat_content_attempts a "
+            "ON a.notice_id=n.notice_id WHERE a.last_attempt_day=? AND a.last_error<>''", (day,),
+        )
+        return [Notice.from_dict(json.loads(row["payload_json"])) for row in rows]
+
     def sync(
         self,
         notices: Iterable[Notice],
@@ -369,11 +436,13 @@ class NoticeStore:
                     self.connection.execute(
                         """
                         UPDATE notices
-                           SET content_hash=?, payload_json=?, ruleset_version=?, rule_label=?,
+                           SET published_at=?, title=?, content_hash=?, payload_json=?, ruleset_version=?, rule_label=?,
                                rule_score=?, last_seen_at=?, seen_count=seen_count+1, last_run_id=?
                          WHERE notice_id=?
                         """,
                         (
+                            notice.published_at,
+                            notice.title,
                             notice.content_hash,
                             payload,
                             ruleset_version,
@@ -479,6 +548,10 @@ class NoticeStore:
             freezes = self.connection.execute(
                 "DELETE FROM digest_freezes WHERE day < ?", (cutoff,)
             ).rowcount
+            content_attempts = self.connection.execute(
+                "DELETE FROM wechat_content_attempts WHERE notice_id NOT IN "
+                "(SELECT notice_id FROM notices)"
+            ).rowcount
         return {
             "notices": notices,
             "analyses": analyses,
@@ -486,6 +559,7 @@ class NoticeStore:
             "runs": runs,
             "ocr_months": old_ocr,
             "digest_freezes": freezes,
+            "content_attempts": content_attempts,
         }
 
     def latest_notices(self, limit: int) -> list[Notice]:
