@@ -179,6 +179,7 @@ class WeReadWebProvider(WechatDiscoveryProvider):
         self.timeout_ms = timeout_ms
         self.content_unavailable = ""
         self.public_content_blocked = False
+        self.session_warmed = False
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -189,6 +190,7 @@ class WeReadWebProvider(WechatDiscoveryProvider):
             }
         )
         payload = json.loads(Path(self.state_path).read_text(encoding="utf-8"))
+        self.original_state = payload
         for cookie in payload.get("cookies", []):
             domain = str(cookie.get("domain") or "")
             if not domain.endswith("weread.qq.com"):
@@ -199,7 +201,56 @@ class WeReadWebProvider(WechatDiscoveryProvider):
                 self.session.cookies.set(name, value, domain=domain, path=str(cookie.get("path") or "/"))
 
     def close(self) -> None:
-        self.session.close()
+        try:
+            # The normal cover response renews reader cookies. Preserve those
+            # server-issued updates in PRIVATE state for the next cloud phase.
+            rows = list(self.original_state.get("cookies", []))
+            changed = False
+            for cookie in self.session.cookies:
+                host = cookie.domain.lstrip(".")
+                if host != "weread.qq.com" and not host.endswith(".weread.qq.com"):
+                    continue
+                existing = next((r for r in rows if r.get("name") == cookie.name
+                                 and r.get("domain") == cookie.domain
+                                 and r.get("path", "/") == cookie.path), None)
+                if existing is not None and existing.get("value") == cookie.value:
+                    continue
+                replacement = {**(existing or {}), "name": cookie.name, "value": cookie.value,
+                    "domain": cookie.domain, "path": cookie.path or "/",
+                    "expires": cookie.expires if cookie.expires is not None else -1,
+                    "secure": cookie.secure, "httpOnly": "HttpOnly" in cookie._rest,
+                    "sameSite": "Lax"}
+                if existing is not None:
+                    rows.remove(existing)
+                rows.append(replacement)
+                changed = True
+            if changed:
+                path = Path(self.state_path)
+                temporary = path.with_suffix(path.suffix + ".tmp")
+                temporary.write_text(json.dumps({**self.original_state, "cookies": rows}, ensure_ascii=False), encoding="utf-8")
+                temporary.replace(path)
+        finally:
+            self.session.close()
+
+    def _warm_reader_session(self, review_id: str) -> None:
+        """The ordinary cover request refreshes the cookie needed by content.
+
+        A saved browser cookie can discover covers yet fail when used directly
+        for content. The normal reader always loads cover before content.
+        """
+        if self.session_warmed:
+            return
+        match = re.match(r"^(MP_WXS_\d+)_", review_id)
+        if not match:
+            raise WechatContentBlocked("微信读书文章标识格式不可识别")
+        response = self.session.get("https://weread.qq.com/api/mp/cover",
+                                    params={"bookId": match.group(1)}, timeout=20)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("errCode", payload.get("errcode", 0)):
+            self.content_unavailable = "微信读书阅读会话初始化失败，本轮已暂停该通道"
+            raise WechatContentBlocked(self.content_unavailable)
+        self.session_warmed = True
 
     def read_article(self, article: WechatArticle) -> WechatArticle:
         """Read the same public article through the normal authenticated reader.
@@ -213,6 +264,7 @@ class WeReadWebProvider(WechatDiscoveryProvider):
             raise WechatContentBlocked(self.content_unavailable)
         if not review_id:
             raise WechatContentBlocked("缺少微信读书文章标识")
+        self._warm_reader_session(review_id)
         response = self.session.get(
             "https://weread.qq.com/web/mp/content",
             params={"reviewId": review_id},
@@ -234,10 +286,10 @@ class WeReadWebProvider(WechatDiscoveryProvider):
             payload = response.json()
             code = payload.get("errCode", payload.get("errcode", 0))
             if code:
-                if code in {-2010, -2012, -2041}:
-                    self.content_unavailable = "微信读书正文授权失效或被限频，本轮已暂停该通道"
+                if code == -2041:
+                    self.content_unavailable = "微信读书正文被限频，本轮已暂停该通道"
                     raise WechatContentBlocked(self.content_unavailable)
-                raise WechatContentBlocked("微信读书正文接口未返回有效内容")
+                raise WechatContentBlocked(f"微信读书未返回该文章的正文（错误码 {code}）")
             source = payload.get("data", "")
             if not isinstance(source, str):
                 raise WechatContentBlocked("微信读书未返回可解析的正文")
@@ -335,6 +387,7 @@ class WeReadWebProvider(WechatDiscoveryProvider):
                 status = "rate_limited" if code == -2041 else "unavailable"
                 error = f"微信读书网页端错误 {code}"
             else:
+                self.session_warmed = True
                 review_id = str(payload.get("reviewId") or "").strip()
                 title = str(payload.get("title") or "").strip()
                 url = self._article_url(review_id, account.book_id)

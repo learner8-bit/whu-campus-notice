@@ -13,7 +13,7 @@ from .rules_v1 import RuleDecision
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-CONTENT_READER_REVISION = "weread-reader-v1"
+CONTENT_READER_REVISION = "weread-reader-cover-session-v2"
 
 
 def now_shanghai() -> str:

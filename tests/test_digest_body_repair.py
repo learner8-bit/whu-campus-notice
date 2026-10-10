@@ -92,6 +92,7 @@ class BodyRepairTests(unittest.TestCase):
             state = Path(tmp)/"state.json"
             state.write_text(json.dumps({"cookies": []}), encoding="utf-8")
             p = WeReadWebProvider(state)
+            p.session_warmed = True
             p.session.get = Mock(return_value=Mock(status_code=403))
             a = WechatArticle("test", "测试", "报名", "https://mp.weixin.qq.com/s/test",
                               raw={"review_id": "MP_WXS_1_test"})
@@ -100,6 +101,33 @@ class BodyRepairTests(unittest.TestCase):
                     p.read_article(a)
             p.session.get.assert_called_once()
             p.close()
+
+    def test_cold_reader_loads_cover_before_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)/"state.json"
+            state.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+            p = WeReadWebProvider(state)
+            cover = Mock(status_code=200)
+            cover.json.return_value = {"title": "报名通知"}
+            content = Mock(status_code=200, text='<div id="js_content">'+"报名须知"*30+'</div>')
+            p.session.get = Mock(side_effect=[cover, content])
+            a = WechatArticle("test", "测试", "报名", "https://mp.weixin.qq.com/s/test",
+                              raw={"review_id": "MP_WXS_1_test"})
+            result = p.read_article(a)
+            self.assertEqual(result.content_quality, "full_text")
+            self.assertIn("/api/mp/cover", p.session.get.call_args_list[0].args[0])
+            self.assertIn("/web/mp/content", p.session.get.call_args_list[1].args[0])
+            p.close()
+
+    def test_server_cookie_refresh_is_persisted_only_to_private_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)/"state.json"
+            state.write_text(json.dumps({"cookies": [], "origins": []}), encoding="utf-8")
+            p = WeReadWebProvider(state)
+            p.session.cookies.set("wr_skey", "test-renewed", domain="weread.qq.com", path="/")
+            p.close()
+            rows = json.loads(state.read_text(encoding="utf-8"))["cookies"]
+            self.assertEqual(rows[0]["value"], "test-renewed")
 
 
 if __name__ == "__main__":
